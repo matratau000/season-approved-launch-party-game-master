@@ -1,66 +1,36 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+import Link from "next/link";
+import { login } from "./actions";
+import { roster, seasons } from "@/lib/roster";
 
-export default function Home() {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const { error } = await searchParams;
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>To get started, edit the page.tsx file.</h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main className="login-shell">
+      <section className="login-card">
+        <div className="brand-lockup">
+          {/* Static brand asset; image optimization adds no value at this size. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/season-approved-logo.png" alt="SeasonApproved" />
+          <span>Launch Party</span>
         </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+        <p className="eyebrow">Find your season</p>
+        <h1>Let the games begin.</h1>
+        <p className="lede">Choose your name to meet your team, submit challenges, and chase the top prize.</p>
+        <form action={login} className="login-form">
+          <label htmlFor="participant">Your name</label>
+          <select id="participant" name="participant" defaultValue="" required>
+            <option value="" disabled>Select your name</option>
+            {seasons.map((season) => (
+              <optgroup label={season} key={season}>
+                {roster[season].map((name) => <option key={name}>{name}</option>)}
+              </optgroup>
+            ))}
+          </select>
+          {error && <p className="error">{error}</p>}
+          <button type="submit">Enter the party</button>
+        </form>
+        <Link className="text-link" href="/scoreboard">View live scoreboard →</Link>
+      </section>
+    </main>
   );
 }
