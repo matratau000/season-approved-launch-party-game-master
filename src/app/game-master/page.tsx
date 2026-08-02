@@ -21,7 +21,7 @@ export default async function GameMasterPage() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={`/media/${item.id}`} alt={`Submission from ${item.participant}`} />
             </a>
-            <div className="submission-copy"><div className="submission-meta"><div><p className="eyebrow">{item.status}</p><h2>{item.participant}</h2></div><time>{new Date(item.created_at + "Z").toLocaleString()}</time></div>{item.note && <p>{item.note}</p>}
+            <div className="submission-copy"><div className="submission-meta"><div><p className="eyebrow">{item.status}</p><h2>{item.participant}</h2></div><time>{new Date(item.created_at + "Z").toLocaleString()}</time></div><p className="submitted-color"><span style={{ background: item.color_hex }} />{item.color_name}</p>
               <form action={reviewSubmission} className="review-form"><input type="hidden" name="submissionId" value={item.id} /><label>Points<input type="number" name="points" min="0" max="1000" defaultValue={item.points || 10} /></label><button name="decision" value="approve">Approve points</button><button className="danger" name="decision" value="reject">Reject</button></form>
             </div>
           </article>

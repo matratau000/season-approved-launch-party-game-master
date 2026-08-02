@@ -13,7 +13,7 @@ One of Winter, Spring, Summer, or Autumn; its score is the sum of its participan
 _Avoid_: Group, squad
 
 **Submission**:
-A photo or screenshot a participant sends as evidence for a Scavenger Hunt item.
+A photo a participant sends for one of the 36 colors in their Season palette.
 _Avoid_: Upload, result
 
 **Game Master**:

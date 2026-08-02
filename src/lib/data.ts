@@ -11,7 +11,8 @@ export type Submission = {
   id: string;
   participant: string;
   content_type: string;
-  note: string;
+  color_name: string;
+  color_hex: string;
   status: "pending" | "approved" | "rejected";
   points: number;
   created_at: string;
@@ -43,7 +44,7 @@ export async function submissions(): Promise<Submission[]> {
   const db = await database();
   const { results } = await db
     .prepare(
-      "SELECT id, participant, content_type, note, status, points, created_at FROM submissions ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created_at DESC",
+      "SELECT id, participant, content_type, color_name, color_hex, status, points, created_at FROM submissions ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created_at DESC",
     )
     .all<Submission>();
   return results;

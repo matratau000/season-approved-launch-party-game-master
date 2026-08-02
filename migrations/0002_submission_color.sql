@@ -1,0 +1,2 @@
+ALTER TABLE submissions ADD COLUMN color_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE submissions ADD COLUMN color_hex TEXT NOT NULL DEFAULT '';

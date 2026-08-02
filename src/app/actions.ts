@@ -4,7 +4,8 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { isParticipant } from "@/lib/roster";
+import { isParticipant, seasonFor } from "@/lib/roster";
+import { colorFor } from "@/lib/season-colors";
 
 const maxUploadBytes = 12 * 1024 * 1024;
 const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]);
@@ -33,10 +34,11 @@ export async function submitScavengerHunt(formData: FormData) {
   if (!isParticipant(participant)) redirect("/");
 
   const file = formData.get("evidence");
-  const note = String(formData.get("note") ?? "").trim().slice(0, 240);
+  const color = colorFor(seasonFor(participant)!, String(formData.get("color") ?? ""));
   if (!(file instanceof File) || file.size === 0) {
     redirect("/scavenger-hunt?error=Choose+a+photo+or+screenshot");
   }
+  if (!color) redirect("/scavenger-hunt?error=Choose+one+of+your+Season+colors");
   if (!allowedTypes.has(file.type) || file.size > maxUploadBytes) {
     redirect("/scavenger-hunt?error=Use+a+JPG,+PNG,+WebP,+or+HEIC+under+12MB");
   }
@@ -51,9 +53,9 @@ export async function submitScavengerHunt(formData: FormData) {
   });
   try {
     await env.DB.prepare(
-      "INSERT INTO submissions (id, participant, object_key, content_type, note) VALUES (?, ?, ?, ?, ?)",
+      "INSERT INTO submissions (id, participant, object_key, content_type, color_name, color_hex) VALUES (?, ?, ?, ?, ?, ?)",
     )
-      .bind(id, participant, objectKey, file.type, note)
+      .bind(id, participant, objectKey, file.type, color.name, color.hex)
       .run();
   } catch (error) {
     await env.SUBMISSIONS.delete(objectKey);
