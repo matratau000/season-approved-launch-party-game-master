@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { login } from "./actions";
 import { roster, seasons } from "@/lib/roster";
 
@@ -29,7 +28,6 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           {error && <p className="error">{error}</p>}
           <button type="submit">Enter the party</button>
         </form>
-        <Link className="text-link" href="/scoreboard">View live scoreboard →</Link>
       </section>
     </main>
   );

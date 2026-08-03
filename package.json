@@ -1,13 +1,14 @@
 {
   "name": "season-approved-launch-party-game-master",
   "version": "0.1.0",
+  "type": "module",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "check": "node scripts/check-roster.mjs && npm run lint && tsc --noEmit",
+    "check": "node scripts/check-roster.mjs && node --experimental-strip-types scripts/check-games.mjs && npm run lint && tsc --noEmit",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",

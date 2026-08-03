@@ -1,33 +1,45 @@
 import Link from "next/link";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { isParticipant, seasonFor } from "@/lib/roster";
+import { gameAccess } from "@/lib/game-access";
+import { roster, seasonFor } from "@/lib/roster";
 import { seasonColors } from "@/lib/season-colors";
+import { submittedColors } from "@/lib/data";
 import { submitScavengerHunt } from "../actions";
+import { Countdown } from "@/components/countdown";
+import { LiveRefresh } from "@/components/live-refresh";
+import { PhotoPicker } from "@/components/photo-picker";
 
-export default async function ScavengerHuntPage({ searchParams }: { searchParams: Promise<{ error?: string; submitted?: string }> }) {
-  const participant = (await cookies()).get("participant")?.value ?? "";
-  if (!isParticipant(participant)) redirect("/");
-  const season = seasonFor(participant)!;
+export const dynamic = "force-dynamic";
+
+const rules = [
+  "Take 2 minutes to choose your strategy and assign roles.",
+  "When the timer begins, your team has 10 minutes to hunt for colors from your assigned season.",
+  "Use your booklet or Color Detect in the SeasonApproved app to check colors.",
+  "Take a clear photo, select the finder, and submit it. Do not submit the same color twice.",
+];
+
+export default async function ScavengerHuntPage({ searchParams }: { searchParams: Promise<{ error?: string; submitted?: string; preview?: string }> }) {
   const params = await searchParams;
-
+  const access = await gameAccess(4, params.preview === "1");
+  const season = access.participant ? seasonFor(access.participant)! : "Winter";
+  const usedColors = access.preview ? [] : await submittedColors(season);
   return (
     <main className={`app-shell narrow theme-${season.toLowerCase()}`}>
-      <Link className="back-link" href="/dashboard">← Team dashboard</Link>
-      <section className="challenge-hero"><p className="eyebrow">Game 01 · Team {season}</p><h1>Scavenger Hunt</h1><p>Take or choose a photo, pick the matching {season} color, and send it to your Game Master.</p></section>
+      <LiveRefresh />
+      <Link className="back-link" href={access.preview ? "/game-master" : "/dashboard"}>← {access.preview ? "Game Master" : "Team dashboard"}</Link>
+      <section className="challenge-hero"><p className="eyebrow">Game 04 · Team {season}{access.preview ? ` · Preview · ${access.state.status}` : ""}</p><h1>Color Scavenger Hunt</h1><p>Take or choose a photo, pick the matching {season} color, and send it to your Game Master.</p>{access.state.started_at && <Countdown startedAt={access.state.started_at} seconds={access.state.duration_seconds} />}</section>
+      <details className="panel directions"><summary>Directions</summary><ol>{rules.map((rule) => <li key={rule}>{rule}</li>)}</ol></details>
       <section className="panel upload-panel">
-        {params.submitted && <div className="success">Submission received. Watch the scoreboard for your points!</div>}
+        {params.submitted && <div className="success">Submission received. Your team can see that color marked below.</div>}
         {params.error && <div className="error-box">{params.error}</div>}
-        <form action={submitScavengerHunt} className="upload-form">
-          <label className="file-picker">
-            <span className="camera-icon">＋</span>
-            <strong>Take or choose a photo</strong>
-            <small>Camera and photo library supported · 12MB max</small>
-            <input type="file" name="evidence" accept="image/*" required />
-          </label>
-          <fieldset className="color-picker"><legend>Which {season} color matches?</legend><div className="color-grid">{seasonColors[season].map((color) => <label key={color.hex}><input type="radio" name="color" value={color.hex} required /><span className="color-swatch" style={{ background: color.hex }} /><span>{color.name}</span></label>)}</div></fieldset>
+        {access.preview ? <p>Preview mode does not accept submissions.</p> : <form action={submitScavengerHunt} className="upload-form">
+          <PhotoPicker />
+          <label>Who found this color?<select name="finder" defaultValue={access.participant} required>{roster[season].map((name) => <option key={name}>{name}</option>)}</select></label>
+          <fieldset className="color-picker"><legend>Which {season} color matches?</legend><div className="color-grid">{seasonColors[season].map((color) => {
+            const used = usedColors.includes(color.hex);
+            return <label className={used ? "used" : ""} key={color.hex}><input type="radio" name="color" value={color.hex} required disabled={used} /><span className="color-swatch" style={{ background: color.hex }} /><span>{color.name}{used ? " ✓" : ""}</span></label>;
+          })}</div></fieldset>
           <button type="submit">Send to Game Master</button>
-        </form>
+        </form>}
       </section>
     </main>
   );

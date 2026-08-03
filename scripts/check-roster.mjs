@@ -7,6 +7,7 @@ const names = Object.values(roster).flat();
 
 assert.deepEqual(Object.keys(roster), ["Winter", "Spring", "Summer", "Autumn"]);
 assert.ok(Object.values(roster).every((team) => team.length === 5));
+assert.ok(roster.Winter.includes("Teddy") && roster.Summer.includes("Gavy"));
 assert.equal(new Set(names.map((name) => name.toLowerCase())).size, 20);
 assert.deepEqual(Object.keys(colors), Object.keys(roster));
 assert.ok(Object.values(colors).every((palette) => palette.length === 36));
