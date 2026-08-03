@@ -67,8 +67,11 @@ export default async function GameMasterPage({ searchParams }: { searchParams: P
         const approved = teamSubmissions.filter((item) => item.status === "approved");
         return <article className={`hunt-team ${season.toLowerCase()}`} key={season}><h3>{season}</h3><p><strong>{approved.length}/{seasonColors[season].length}</strong> approved · {teamSubmissions.length - approved.length} pending · {approved.reduce((sum, item) => sum + item.points, 0)} in-game points</p><div className="hunt-bar"><span style={{ width: `${approved.length / seasonColors[season].length * 100}%` }} /></div><div className="hunt-colors">{seasonColors[season].map((color) => {
           const submission = byColor.get(color.hex);
-          return <span className={submission?.status ?? "missing"} title={`${color.name}: ${submission?.status ?? "missing"}`} key={color.hex} style={{ background: color.hex }} />;
-        })}</div></article>;
+          return <span className={submission?.status ?? "missing"} aria-label={`${color.name}: ${submission?.status ?? "missing"}`} title={`${color.name}: ${submission?.status ?? "missing"}`} key={color.hex} style={{ background: color.hex }} />;
+        })}</div><details className="hunt-checklist"><summary>View color checklist</summary><ul>{seasonColors[season].map((color) => {
+          const status = byColor.get(color.hex)?.status ?? "missing";
+          return <li key={color.hex}><i style={{ background: color.hex }} /><span>{color.name}</span><small>{status}</small></li>;
+        })}</ul></details></article>;
       })}</div></section>
 
       <section className="admin-section"><div className="section-heading"><div><p className="eyebrow">Game 04</p><h2>Scavenger Hunt submissions</h2></div></div><section className="submission-grid">

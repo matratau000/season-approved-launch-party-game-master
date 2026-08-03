@@ -195,6 +195,12 @@ textarea { padding: 1rem; resize: vertical; }
 .hunt-colors span { aspect-ratio: 1; border: 1px solid rgba(0,0,0,.2); border-radius: 50%; opacity: .2; }
 .hunt-colors span.pending { opacity: .7; box-shadow: 0 0 0 2px #dd8427; }
 .hunt-colors span.approved { opacity: 1; box-shadow: 0 0 0 2px #198754; }
+.hunt-checklist { margin-top: .8rem; font-size: .78rem; }
+.hunt-checklist summary { cursor: pointer; font-weight: 800; }
+.hunt-checklist ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .3rem .7rem; margin: .7rem 0 0; padding: 0; list-style: none; }
+.hunt-checklist li { display: grid; grid-template-columns: .75rem 1fr auto; gap: .4rem; align-items: center; }
+.hunt-checklist i { width: .75rem; height: .75rem; border: 1px solid rgba(0,0,0,.2); border-radius: 50%; }
+.hunt-checklist small { color: var(--muted); text-transform: capitalize; }
 .empty-state { grid-column: 1 / -1; padding: 6rem 2rem; border: 1px dashed var(--line); border-radius: 1.2rem; text-align: center; }
 .empty-state span { font-size: 3rem; }
 .empty-state h2 { margin: 1rem 0 .5rem; font-size: 2rem; }

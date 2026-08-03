@@ -72,7 +72,7 @@ export async function setGameStatus(formData: FormData) {
   if (!gameId || !["locked", "live", "completed"].includes(status)) return;
   const db = await database();
   const statements = [];
-  if (status === "live") statements.push(db.prepare("UPDATE game_state SET status = 'locked' WHERE status = 'live' AND game_id != ?").bind(gameId));
+  if (status === "live") statements.push(db.prepare("UPDATE game_state SET status = 'locked', started_at = CASE WHEN game_id = 4 THEN NULL ELSE started_at END, timer_phase = CASE WHEN game_id = 4 THEN 'idle' ELSE timer_phase END, timer_running = CASE WHEN game_id = 4 THEN 0 ELSE timer_running END, timer_remaining_seconds = CASE WHEN game_id = 4 THEN 0 ELSE timer_remaining_seconds END WHERE status = 'live' AND game_id != ?").bind(gameId));
   statements.push(gameId === 4 && status !== "live"
     ? db.prepare("UPDATE game_state SET status = ?, started_at = NULL, timer_phase = 'idle', timer_running = 0, timer_remaining_seconds = 0 WHERE game_id = 4").bind(status)
     : db.prepare("UPDATE game_state SET status = ? WHERE game_id = ?").bind(status, gameId));
