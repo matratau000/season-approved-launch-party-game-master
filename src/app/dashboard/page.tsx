@@ -36,9 +36,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       <section className="action-grid games-grid">
         {games.map((game) => {
           const state = states.find((item) => item.game_id === game.id)?.status ?? "locked";
-          const content = <><span>{game.icon}</span><div><p className="eyebrow">Game {String(game.id).padStart(2, "0")} · {state}</p><h2>{game.title}</h2><p>{state === "live" ? game.summary : state === "completed" ? "This game is complete." : "Waiting for the Game Master."}</p></div><b>{state === "live" ? "→" : ""}</b></>;
-          return state === "live"
-            ? <Link className="action-card primary-action" href={game.id === 4 ? "/scavenger-hunt" : `/games/${game.id}`} key={game.id}>{content}</Link>
+          const content = <><span>{game.icon}</span><div><p className="eyebrow">Game {String(game.id).padStart(2, "0")} · {state}</p><h2>{game.title}</h2><p>{state === "live" ? game.summary : state === "completed" ? "Review the directions. Game actions are closed." : "Waiting for the Game Master."}</p></div><b>{state !== "locked" ? "→" : ""}</b></>;
+          return state !== "locked"
+            ? <Link className={`action-card ${state === "live" ? "primary-action" : "completed-action"}`} href={game.id === 4 ? "/scavenger-hunt" : `/games/${game.id}`} key={game.id}>{content}</Link>
             : <article className="action-card disabled" key={game.id}>{content}</article>;
         })}
       </section>
