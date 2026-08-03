@@ -30,8 +30,9 @@ h1, h2 { font-family: var(--font-display), serif; line-height: .98; }
 .login-card h1 { margin-bottom: 1rem; font-size: clamp(2.7rem, 11vw, 4.6rem); }
 .login-form { display: grid; gap: .75rem; margin: 2rem 0 1.4rem; text-align: left; }
 .login-form label, .upload-form > label:not(.file-picker) { font-size: .84rem; font-weight: 800; }
-select, textarea, input[type="number"] { width: 100%; border: 1px solid var(--line); border-radius: .85rem; background: white; color: var(--ink); }
+select, textarea, input[type="number"], input[type="password"], input[type="url"] { width: 100%; border: 1px solid var(--line); border-radius: .85rem; background: white; color: var(--ink); }
 select { height: 3.5rem; padding: 0 1rem; }
+input[type="password"], input[type="url"] { height: 3.5rem; padding: 0 1rem; }
 textarea { padding: 1rem; resize: vertical; }
 .login-form button, .upload-form button, .review-form button { min-height: 3.5rem; padding: .8rem 1.2rem; border-radius: .85rem; color: white; background: var(--brand); font-weight: 800; }
 .text-link, .back-link { color: var(--brand); font-weight: 750; }
@@ -66,6 +67,8 @@ textarea { padding: 1rem; resize: vertical; }
 .action-card b { font-size: 1.5rem; }
 .primary-action { color: white; background: var(--brand); }
 .primary-action p:last-child { color: rgba(255,255,255,.7); }
+.action-card.disabled { opacity: .58; }
+.games-grid { grid-template-columns: repeat(2, 1fr); }
 .live-pill { display: inline-flex; align-items: center; gap: .45rem; padding: .55rem .8rem; border-radius: 999px; color: #155a2d; background: #dcf4e3; font-size: .72rem; font-weight: 850; text-transform: uppercase; letter-spacing: .1em; }
 .live-pill::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: #25a353; box-shadow: 0 0 0 .25rem rgba(37, 163, 83, .16); }
 
@@ -92,6 +95,7 @@ textarea { padding: 1rem; resize: vertical; }
 .file-picker { position: relative; display: grid; place-items: center; min-height: 15rem; padding: 2rem; border: 2px dashed rgba(24,61,51,.25); border-radius: 1.2rem; background: #f1f4ed; text-align: center; cursor: pointer; }
 .file-picker input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
 .file-picker small { color: var(--muted); }
+.photo-preview { width: 100%; max-height: 15rem; margin-bottom: .8rem; border-radius: .8rem; object-fit: contain; }
 .camera-icon { display: grid; place-items: center; width: 3.5rem; height: 3.5rem; margin-bottom: .8rem; border-radius: 50%; color: white; background: var(--brand); font-size: 1.7rem; }
 .color-picker { margin: .5rem 0; padding: 0; border: 0; }
 .color-picker legend { margin-bottom: .8rem; font-size: .84rem; font-weight: 800; }
@@ -100,10 +104,15 @@ textarea { padding: 1rem; resize: vertical; }
 .color-grid input { position: absolute; opacity: 0; }
 .color-grid label:has(input:checked) { border-color: var(--brand); background: #eef2ec; }
 .color-grid label:has(input:focus-visible) { outline: 3px solid #65a58e; outline-offset: 2px; }
+.color-grid label.used { opacity: .42; cursor: not-allowed; }
 .color-swatch { width: 2.7rem; height: 2.7rem; border: 1px solid rgba(0,0,0,.2); border-radius: 50%; }
 .success, .error-box { margin-bottom: 1rem; padding: 1rem; border-radius: .8rem; font-weight: 700; }
 .success { color: #155a2d; background: #dcf4e3; }
 .error-box { color: #84271f; background: #f9dedb; }
+.countdown { display: inline-block; margin-top: 1rem; font-variant-numeric: tabular-nums; font-size: clamp(2.4rem, 9vw, 4rem); }
+.directions summary { cursor: pointer; color: var(--brand); font-weight: 850; }
+.directions li, .rules li { margin: .7rem 0; line-height: 1.5; }
+.button-link { display: inline-flex; padding: .75rem 1rem; border-radius: .8rem; color: white; background: var(--brand); font-weight: 750; }
 
 .tv-shell { min-height: 100vh; padding: 3vw 4vw; color: white; background: #121916; }
 .tv-header h1 { margin: 0; font-size: clamp(3rem, 6vw, 6rem); }
@@ -123,6 +132,23 @@ textarea { padding: 1rem; resize: vertical; }
 .admin-header a { padding: .8rem 1rem; border-radius: .8rem; color: white; background: var(--brand); font-weight: 750; }
 .admin-nav { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; padding: 1rem 1.2rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--card); }
 .admin-nav span { color: var(--muted); font-size: .85rem; }
+.game-controls { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+.game-control { display: grid; gap: 1rem; padding: 1.2rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--card); }
+.game-control h2, .admin-section h2 { margin: 0; font-size: 1.8rem; }
+.control-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.control-actions form { margin: 0; }
+.control-actions button, .game-control button { min-height: 2.6rem; padding: .6rem .8rem; border-radius: .75rem; font-weight: 750; }
+.control-actions .selected { color: white; background: var(--brand); }
+.admin-section { margin-top: 1rem; }
+.song-grid { display: grid; gap: .5rem; margin-top: 1rem; }
+.song-row { display: grid; grid-template-columns: 5rem 1fr 1.3fr auto; gap: .5rem; align-items: center; }
+.song-row select { height: 2.8rem; }
+.song-row button, .score-form button, .link-form button { min-height: 2.8rem; padding: .6rem 1rem; border-radius: .75rem; color: white; background: var(--brand); font-weight: 800; }
+.score-form { display: grid; grid-template-columns: repeat(4, 1fr) auto; gap: .75rem; align-items: end; margin-top: 1rem; }
+.score-form label, .link-form label { font-size: .75rem; font-weight: 800; }
+.score-form select { height: 2.8rem; margin-top: .3rem; }
+.link-form { display: grid; grid-template-columns: 1fr auto; gap: .75rem; align-items: end; margin-top: 1rem; }
+.link-form input { height: 2.8rem; margin-top: .3rem; }
 .submission-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .submission-card { display: grid; grid-template-columns: minmax(11rem, .8fr) 1.2fr; min-height: 18rem; border: 1px solid var(--line); border-radius: 1.2rem; background: var(--card); overflow: hidden; }
 .evidence { min-height: 18rem; background: #e8e5dc; }
@@ -145,7 +171,7 @@ textarea { padding: 1rem; resize: vertical; }
 
 @media (max-width: 760px) {
   .team-grid { grid-template-columns: repeat(2, 1fr); }
-  .action-grid, .submission-grid { grid-template-columns: 1fr; }
+  .action-grid, .submission-grid, .game-controls { grid-template-columns: 1fr; }
   .contributors { grid-template-columns: repeat(2, 1fr); }
   .submission-card { grid-template-columns: 1fr; }
   .hero-grid { gap: .65rem; }
@@ -162,4 +188,6 @@ textarea { padding: 1rem; resize: vertical; }
   .review-form { grid-template-columns: 4.5rem 1fr; }
   .review-form .danger { grid-column: 1 / -1; }
   .color-grid { grid-template-columns: repeat(4, 1fr); }
+  .song-row { grid-template-columns: 1fr 1fr; }
+  .score-form, .link-form { grid-template-columns: 1fr; }
 }

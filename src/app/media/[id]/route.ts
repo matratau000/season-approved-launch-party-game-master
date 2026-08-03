@@ -1,6 +1,8 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { isGameMaster } from "@/lib/game-master";
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (!(await isGameMaster())) return new Response("Not found", { status: 404 });
   const { id } = await params;
   const { env } = await getCloudflareContext({ async: true });
   const row = await env.DB.prepare("SELECT object_key, content_type FROM submissions WHERE id = ?")

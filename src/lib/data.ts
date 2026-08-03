@@ -1,5 +1,6 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { roster, seasons, type Season } from "./roster";
+import type { GameId } from "./games";
 
 export type SeasonStanding = {
   season: Season;
@@ -7,9 +8,27 @@ export type SeasonStanding = {
   contributors: { name: string; points: number }[];
 };
 
+export type GameState = {
+  game_id: GameId;
+  status: "locked" | "live" | "completed";
+  started_at: string | null;
+  duration_seconds: number;
+  external_url: string;
+};
+
+export type GameScore = {
+  game_id: GameId;
+  slot: string;
+  season: Season;
+  participant: string | null;
+  points: number;
+  detail: string;
+};
+
 export type Submission = {
   id: string;
   participant: string;
+  season: Season;
   content_type: string;
   color_name: string;
   color_hex: string;
@@ -25,27 +44,58 @@ async function database() {
 export async function standings(): Promise<SeasonStanding[]> {
   const db = await database();
   const { results } = await db
-    .prepare("SELECT participant, SUM(points) AS points FROM score_events GROUP BY participant")
-    .all<{ participant: string; points: number }>();
-  const points = new Map(results.map((row) => [row.participant, Number(row.points)]));
+    .prepare("SELECT season, participant, points FROM game_scores")
+    .all<{ season: Season; participant: string | null; points: number }>();
+  const teamPoints = new Map<Season, number>();
+  const participantPoints = new Map<string, number>();
+  for (const row of results) {
+    teamPoints.set(row.season, (teamPoints.get(row.season) ?? 0) + Number(row.points));
+    if (row.participant) participantPoints.set(row.participant, (participantPoints.get(row.participant) ?? 0) + Number(row.points));
+  }
 
   return seasons
     .map((season) => ({
       season,
-      points: roster[season].reduce((total, name) => total + (points.get(name) ?? 0), 0),
+      points: teamPoints.get(season) ?? 0,
       contributors: roster[season]
-        .map((name) => ({ name, points: points.get(name) ?? 0 }))
+        .map((name) => ({ name, points: participantPoints.get(name) ?? 0 }))
         .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name)),
     }))
-    .sort((a, b) => b.points - a.points);
+    .sort((a, b) => b.points - a.points || a.season.localeCompare(b.season));
+}
+
+export async function gameStates(): Promise<GameState[]> {
+  const { results } = await (await database())
+    .prepare("SELECT game_id, status, started_at, duration_seconds, external_url FROM game_state ORDER BY game_id")
+    .all<GameState>();
+  return results;
+}
+
+export async function gameState(gameId: GameId): Promise<GameState | null> {
+  return (await database()).prepare("SELECT game_id, status, started_at, duration_seconds, external_url FROM game_state WHERE game_id = ?")
+    .bind(gameId).first<GameState>();
+}
+
+export async function gameScores(): Promise<GameScore[]> {
+  const { results } = await (await database())
+    .prepare("SELECT game_id, slot, season, participant, points, detail FROM game_scores ORDER BY game_id, slot")
+    .all<GameScore>();
+  return results;
 }
 
 export async function submissions(): Promise<Submission[]> {
-  const db = await database();
-  const { results } = await db
+  const { results } = await (await database())
     .prepare(
-      "SELECT id, participant, content_type, color_name, color_hex, status, points, created_at FROM submissions ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created_at DESC",
+      "SELECT id, participant, season, content_type, color_name, color_hex, status, points, created_at FROM submissions ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created_at DESC",
     )
     .all<Submission>();
   return results;
+}
+
+export async function submittedColors(season: Season): Promise<string[]> {
+  const { results } = await (await database())
+    .prepare("SELECT DISTINCT color_hex FROM submissions WHERE season = ? AND status != 'rejected'")
+    .bind(season)
+    .all<{ color_hex: string }>();
+  return results.map((row) => row.color_hex);
 }
