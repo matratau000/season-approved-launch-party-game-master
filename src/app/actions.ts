@@ -9,6 +9,7 @@ import { games, type GameId } from "@/lib/games";
 import { isParticipant, roster, seasonFor, seasons, type Season } from "@/lib/roster";
 import { allUnique, kahootPoints, placePoints, songPoints } from "@/lib/scoring";
 import { colorFor } from "@/lib/season-colors";
+import { timerRemaining } from "@/lib/timer";
 
 const maxUploadBytes = 12 * 1024 * 1024;
 const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]);
@@ -72,10 +73,34 @@ export async function setGameStatus(formData: FormData) {
   const db = await database();
   const statements = [];
   if (status === "live") statements.push(db.prepare("UPDATE game_state SET status = 'locked' WHERE status = 'live' AND game_id != ?").bind(gameId));
-  statements.push(db.prepare(
-    "UPDATE game_state SET status = ?, started_at = CASE WHEN ? = 'live' AND game_id = 4 THEN CURRENT_TIMESTAMP ELSE started_at END WHERE game_id = ?",
-  ).bind(status, status, gameId));
+  statements.push(gameId === 4 && status !== "live"
+    ? db.prepare("UPDATE game_state SET status = ?, started_at = NULL, timer_phase = 'idle', timer_running = 0, timer_remaining_seconds = 0 WHERE game_id = 4").bind(status)
+    : db.prepare("UPDATE game_state SET status = ? WHERE game_id = ?").bind(status, gameId));
   await db.batch(statements);
+  revalidateLiveViews();
+}
+
+export async function controlScavengerTimer(formData: FormData) {
+  await requireGameMaster();
+  const operation = String(formData.get("operation") ?? "");
+  const db = await database();
+  const state = await db.prepare("SELECT status, started_at, duration_seconds, timer_phase, timer_running, timer_remaining_seconds FROM game_state WHERE game_id = 4").first<{
+    status: string; started_at: string | null; duration_seconds: number; timer_phase: string; timer_running: number; timer_remaining_seconds: number;
+  }>();
+  if (!state || (state.status !== "live" && operation !== "reset")) return;
+
+  if (operation === "start-delegation" || operation === "start-hunt") {
+    const seconds = operation === "start-delegation" ? 120 : 600;
+    const phase = operation === "start-delegation" ? "delegation" : "hunt";
+    await db.prepare("UPDATE game_state SET timer_phase = ?, timer_running = 1, started_at = CURRENT_TIMESTAMP, duration_seconds = ?, timer_remaining_seconds = ? WHERE game_id = 4").bind(phase, seconds, seconds).run();
+  } else if (operation === "pause" && state.timer_running) {
+    const remaining = timerRemaining(state);
+    await db.prepare("UPDATE game_state SET timer_running = 0, started_at = NULL, timer_remaining_seconds = ? WHERE game_id = 4").bind(remaining).run();
+  } else if (operation === "resume" && !state.timer_running && state.timer_phase !== "idle" && state.timer_remaining_seconds > 0) {
+    await db.prepare("UPDATE game_state SET timer_running = 1, started_at = CURRENT_TIMESTAMP, duration_seconds = timer_remaining_seconds WHERE game_id = 4").run();
+  } else if (operation === "reset") {
+    await db.prepare("UPDATE game_state SET timer_phase = 'idle', timer_running = 0, started_at = NULL, duration_seconds = 600, timer_remaining_seconds = 0 WHERE game_id = 4").run();
+  } else return;
   revalidateLiveViews();
 }
 
@@ -151,10 +176,9 @@ export async function submitScavengerHunt(formData: FormData) {
   if (!allowedTypes.has(file.type) || file.size > maxUploadBytes) redirect("/scavenger-hunt?error=Use+a+JPG,+PNG,+WebP,+or+HEIC+under+12MB");
 
   const db = await database();
-  const state = await db.prepare("SELECT status, started_at, duration_seconds FROM game_state WHERE game_id = 4")
-    .first<{ status: string; started_at: string | null; duration_seconds: number }>();
-  const expires = state?.started_at ? new Date(`${state.started_at.replace(" ", "T")}Z`).getTime() + state.duration_seconds * 1000 : 0;
-  if (state?.status !== "live" || !expires || Date.now() >= expires) redirect("/dashboard?error=The+Scavenger+Hunt+is+closed");
+  const state = await db.prepare("SELECT status, started_at, duration_seconds, timer_phase, timer_running, timer_remaining_seconds FROM game_state WHERE game_id = 4")
+    .first<{ status: string; started_at: string | null; duration_seconds: number; timer_phase: string; timer_running: number; timer_remaining_seconds: number }>();
+  if (!state || state.status !== "live" || state.timer_phase !== "hunt" || !state.timer_running || timerRemaining(state) <= 0) redirect("/dashboard?error=The+Scavenger+Hunt+is+closed");
   if (await db.prepare("SELECT id FROM submissions WHERE season = ? AND color_hex = ? AND status != 'rejected'").bind(season, color.hex).first()) {
     redirect("/scavenger-hunt?error=Your+team+already+submitted+that+color");
   }
@@ -184,8 +208,14 @@ export async function reviewSubmission(formData: FormData) {
   const decision = String(formData.get("decision") ?? "");
   if (!submissionId || !["approve", "reject"].includes(decision)) return;
   await (await database()).prepare(
-    "UPDATE submissions SET status = ?, points = 0, reviewed_at = CURRENT_TIMESTAMP WHERE id = ?",
-  ).bind(decision === "approve" ? "approved" : "rejected", submissionId).run();
+    "UPDATE submissions SET status = ?, points = ?, reviewed_at = CURRENT_TIMESTAMP WHERE id = ?",
+  ).bind(decision === "approve" ? "approved" : "rejected", decision === "approve" ? 1 : 0, submissionId).run();
   revalidatePath("/game-master");
   revalidatePath("/scavenger-hunt");
+}
+
+export async function resetScoreboard() {
+  await requireGameMaster();
+  await (await database()).prepare("DELETE FROM game_scores").run();
+  revalidateLiveViews();
 }

@@ -13,6 +13,9 @@ export type GameState = {
   status: "locked" | "live" | "completed";
   started_at: string | null;
   duration_seconds: number;
+  timer_phase: "idle" | "delegation" | "hunt";
+  timer_running: number;
+  timer_remaining_seconds: number;
   external_url: string;
 };
 
@@ -66,13 +69,13 @@ export async function standings(): Promise<SeasonStanding[]> {
 
 export async function gameStates(): Promise<GameState[]> {
   const { results } = await (await database())
-    .prepare("SELECT game_id, status, started_at, duration_seconds, external_url FROM game_state ORDER BY game_id")
+    .prepare("SELECT game_id, status, started_at, duration_seconds, timer_phase, timer_running, timer_remaining_seconds, external_url FROM game_state ORDER BY game_id")
     .all<GameState>();
   return results;
 }
 
 export async function gameState(gameId: GameId): Promise<GameState | null> {
-  return (await database()).prepare("SELECT game_id, status, started_at, duration_seconds, external_url FROM game_state WHERE game_id = ?")
+  return (await database()).prepare("SELECT game_id, status, started_at, duration_seconds, timer_phase, timer_running, timer_remaining_seconds, external_url FROM game_state WHERE game_id = ?")
     .bind(gameId).first<GameState>();
 }
 
