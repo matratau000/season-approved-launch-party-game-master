@@ -131,6 +131,7 @@ export async function saveSongScore(formData: FormData) {
     ).bind(crypto.randomUUID(), slot, season, points, result).run();
   }
   revalidateLiveViews();
+  redirect(`/game-master#${slot}`);
 }
 
 export async function savePlacements(formData: FormData) {
