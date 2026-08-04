@@ -2,24 +2,29 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { logout } from "../actions";
-import { gameStates, standings } from "@/lib/data";
+import { gameStates, gamesAreOver, standings } from "@/lib/data";
 import { games } from "@/lib/games";
 import { isParticipant, roster, seasonFor } from "@/lib/roster";
 import { LiveRefresh } from "@/components/live-refresh";
+import { WelcomeCelebration, WinnerCelebration } from "@/components/celebration";
+import { uniqueLeader } from "@/lib/scoring";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ error?: string; welcome?: string }> }) {
   const participant = (await cookies()).get("participant")?.value ?? "";
   if (!isParticipant(participant)) redirect("/");
   const season = seasonFor(participant)!;
-  const [currentStandings, states, params] = await Promise.all([standings(), gameStates(), searchParams]);
+  const [currentStandings, states, over, params] = await Promise.all([standings(), gameStates(), gamesAreOver(), searchParams]);
   const own = currentStandings.find((entry) => entry.season === season)!;
+  const winner = uniqueLeader(currentStandings);
   const personalPoints = own.contributors.find((entry) => entry.name === participant)?.points ?? 0;
 
   return (
     <main className={`app-shell theme-${season.toLowerCase()}`}>
       <LiveRefresh />
+      {params.welcome === "1" && <WelcomeCelebration name={participant} season={season} />}
+      {params.welcome !== "1" && over && winner && <WinnerCelebration season={winner.season} />}
       <header className="app-header">
         <div><p className="eyebrow">Welcome, {participant}</p><h1>Team {season}</h1></div>
         <form action={logout}><button className="ghost">Switch participant</button></form>
