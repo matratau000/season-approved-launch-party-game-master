@@ -216,10 +216,11 @@ export async function reviewSubmission(formData: FormData) {
   revalidatePath("/scavenger-hunt");
 }
 
-export async function resetScoreboard() {
+export async function resetDashboard() {
   await requireGameMaster();
   await (await database()).prepare("DELETE FROM game_scores").run();
   revalidateLiveViews();
+  redirect("/game-master");
 }
 
 export async function resetScavengerSubmissions() {

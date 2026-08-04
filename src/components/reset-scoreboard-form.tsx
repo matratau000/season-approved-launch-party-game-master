@@ -1,11 +1,11 @@
 "use client";
 
-import { resetScavengerSubmissions, resetScoreboard } from "@/app/actions";
+import { resetDashboard, resetScavengerSubmissions } from "@/app/actions";
 
-export function ResetScoreboardForm() {
-  return <form action={resetScoreboard} onSubmit={(event) => {
-    if (!window.confirm("Reset every game score? Submissions and photos will be kept.")) event.preventDefault();
-  }}><button className="danger ghost">Reset scoreboard</button></form>;
+export function ResetDashboardForm() {
+  return <form action={resetDashboard} onSubmit={(event) => {
+    if (!window.confirm("Reset the Game Master dashboard? Every saved song score, winner, and placement will be cleared. Submissions and photos will be kept.")) event.preventDefault();
+  }}><button className="danger ghost">Reset dashboard</button></form>;
 }
 
 export function ResetScavengerForm() {

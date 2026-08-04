@@ -5,7 +5,7 @@ import { isGameMaster } from "@/lib/game-master";
 import { roster, seasons } from "@/lib/roster";
 import { LiveRefresh } from "@/components/live-refresh";
 import { Countdown } from "@/components/countdown";
-import { ResetScavengerForm, ResetScoreboardForm } from "@/components/reset-scoreboard-form";
+import { ResetDashboardForm, ResetScavengerForm } from "@/components/reset-scoreboard-form";
 import { seasonColors } from "@/lib/season-colors";
 import { timerRemaining } from "@/lib/timer";
 import { finalResultsComplete, placePoints, uniqueLeader } from "@/lib/scoring";
@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 function StatusControls({ game, state }: { game: (typeof games)[number]; state: Awaited<ReturnType<typeof gameStates>>[number] }) {
   const remaining = timerRemaining(state);
-  return <article className="game-control"><div><p className="eyebrow">Game {String(game.id).padStart(2, "0")} · {state.status}</p><h2>{game.title}</h2></div><div className="control-actions">
+  return <article className="game-control"><div><p className="eyebrow">Game {String(game.id).padStart(2, "0")} · {state.status}</p><h2>{game.title}</h2></div><div className="control-actions status-actions">
     <a className="ghost button-link" href={game.id === 4 ? "/scavenger-hunt?preview=1" : `/games/${game.id}?preview=1`}>Preview</a>
     {(["locked", "live", "completed"] as const).map((status) => <form action={setGameStatus} key={status}><input type="hidden" name="gameId" value={game.id} /><button className={state.status === status ? "selected" : "ghost"} name="status" value={status}>{status}</button></form>)}
   </div>{game.id === 4 && <div className="timer-control"><p><strong>{state.timer_phase === "delegation" ? "Delegation timer" : state.timer_phase === "hunt" ? "Hunt timer" : "Timer ready"}</strong>{state.timer_phase !== "idle" && ` · ${state.timer_running ? "playing" : "paused"}`}</p>{state.timer_phase !== "idle" && <Countdown startedAt={state.started_at} seconds={state.timer_running ? state.duration_seconds : remaining} running={Boolean(state.timer_running)} />}<div className="control-actions">
@@ -61,7 +61,7 @@ export default async function GameMasterPage({ searchParams }: { searchParams: P
     <main className="admin-shell">
       <LiveRefresh every={4000} />
       {resultsComplete && states.every((state) => state.status === "completed") && winner && <WinnerCelebration season={winner.season} />}
-      <header className="admin-header"><div><p className="eyebrow">SeasonApproved Analyst</p><h1>Game Master</h1><p>{pending} submission{pending === 1 ? "" : "s"} waiting for review</p></div><div className="control-actions"><a href="/scoreboard" target="_blank">Open TV scoreboard ↗</a><form action={endGames}><button disabled={!winner || !resultsComplete}>{!resultsComplete ? "Games are over · submit every result" : winner ? `Games are over · ${winner.season} wins` : "Games are over · resolve the tie"}</button></form><ResetScoreboardForm /><form action={gameMasterLogout}><button className="ghost">Sign out</button></form></div></header>
+      <header className="admin-header"><div><p className="eyebrow">SeasonApproved Analyst</p><h1>Game Master</h1><p>{pending} submission{pending === 1 ? "" : "s"} waiting for review</p></div><div className="control-actions"><a href="/scoreboard" target="_blank">Open TV scoreboard ↗</a><form action={endGames}><button disabled={!winner || !resultsComplete}>{!resultsComplete ? "Games are over · submit every result" : winner ? `Games are over · ${winner.season} wins` : "Games are over · resolve the tie"}</button></form><ResetDashboardForm /><form action={gameMasterLogout}><button className="ghost">Sign out</button></form></div></header>
       <section className="game-controls">{games.map((game) => <StatusControls game={game} state={states.find((state) => state.game_id === game.id)!} key={game.id} />)}</section>
 
       <section className="panel admin-section" id="game-1"><p className="eyebrow">Game 01</p><h2>Color Song Quiz scoring</h2><div className="in-game-totals">{seasons.map((season) => <span key={season}><strong>{season}</strong>{songTotals.get(season)} in-game points</span>)}</div><div className="song-grid">{Array.from({ length: 22 }, (_, index) => {
