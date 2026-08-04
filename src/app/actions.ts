@@ -7,7 +7,7 @@ import { redirect } from "next/navigation";
 import { clearGameMasterSession, gameMasterPinMatches, isGameMaster, setGameMasterSession } from "@/lib/game-master";
 import { games, type GameId } from "@/lib/games";
 import { isParticipant, roster, seasonFor, seasons, type Season } from "@/lib/roster";
-import { allUnique, kahootPoints, placePoints, songPoints } from "@/lib/scoring";
+import { allUnique, finalResultsComplete, kahootPoints, placePoints, songPoints, uniqueLeader } from "@/lib/scoring";
 import { colorFor } from "@/lib/season-colors";
 import { timerRemaining } from "@/lib/timer";
 
@@ -44,7 +44,7 @@ export async function login(formData: FormData) {
     maxAge: 60 * 60 * 24 * 2,
     path: "/",
   });
-  redirect("/dashboard");
+  redirect("/dashboard?welcome=1");
 }
 
 export async function logout() {
@@ -136,17 +136,18 @@ export async function saveSongScore(formData: FormData) {
 export async function savePlacements(formData: FormData) {
   await requireGameMaster();
   const gameId = gameIdFrom(formData);
-  if (gameId !== 2 && gameId !== 4) return;
+  if (gameId !== 1 && gameId !== 2 && gameId !== 4) return;
   const placements = placePoints.map((_, index) => String(formData.get(`place${index + 1}`) ?? ""));
   if (!allUnique(placements) || !placements.every((season) => seasons.includes(season as Season))) return;
   const db = await database();
   await db.batch([
-    db.prepare("DELETE FROM game_scores WHERE game_id = ?").bind(gameId),
+    db.prepare("DELETE FROM game_scores WHERE game_id = ? AND slot LIKE 'place-%'").bind(gameId),
     ...placements.map((season, index) => db.prepare(
       "INSERT INTO game_scores (id, game_id, slot, season, points, detail) VALUES (?, ?, ?, ?, ?, ?)",
     ).bind(crypto.randomUUID(), gameId, `place-${index + 1}`, season, placePoints[index], `${index + 1}`)),
   ]);
   revalidateLiveViews();
+  redirect(`/game-master#game-${gameId}`);
 }
 
 export async function saveKahootWinners(formData: FormData) {
@@ -161,6 +162,7 @@ export async function saveKahootWinners(formData: FormData) {
     ).bind(crypto.randomUUID(), `place-${index + 1}`, seasonFor(participant)!, participant, kahootPoints[index], `${index + 1}`)),
   ]);
   revalidateLiveViews();
+  redirect("/game-master#game-3");
 }
 
 export async function submitScavengerHunt(formData: FormData) {
@@ -217,5 +219,28 @@ export async function reviewSubmission(formData: FormData) {
 export async function resetScoreboard() {
   await requireGameMaster();
   await (await database()).prepare("DELETE FROM game_scores").run();
+  revalidateLiveViews();
+}
+
+export async function resetScavengerSubmissions() {
+  await requireGameMaster();
+  const { env } = await getCloudflareContext({ async: true });
+  const { results } = await env.DB.prepare("SELECT object_key FROM submissions").all<{ object_key: string }>();
+  const keys = results.map((row) => row.object_key);
+  for (let index = 0; index < keys.length; index += 1000) await env.SUBMISSIONS.delete(keys.slice(index, index + 1000));
+  await env.DB.prepare("DELETE FROM submissions").run();
+  revalidateLiveViews();
+}
+
+export async function endGames() {
+  await requireGameMaster();
+  const db = await database();
+  const { results: finalScores } = await db.prepare("SELECT game_id, slot FROM game_scores WHERE slot LIKE 'place-%'").all<{ game_id: GameId; slot: string }>();
+  if (!finalResultsComplete(finalScores)) return;
+  const { results } = await db.prepare(
+    "SELECT season, SUM(points) AS points FROM game_scores WHERE slot LIKE 'place-%' GROUP BY season ORDER BY points DESC",
+  ).all<{ season: Season; points: number }>();
+  if (!uniqueLeader(results.map((row) => ({ ...row, points: Number(row.points) })))) return;
+  await db.prepare("UPDATE game_state SET status = 'completed', started_at = NULL, timer_phase = CASE WHEN game_id = 4 THEN 'idle' ELSE timer_phase END, timer_running = 0, timer_remaining_seconds = CASE WHEN game_id = 4 THEN 0 ELSE timer_remaining_seconds END").run();
   revalidateLiveViews();
 }

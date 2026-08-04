@@ -1,6 +1,7 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { roster, seasons, type Season } from "./roster";
 import type { GameId } from "./games";
+import { finalResultsComplete, isFinalScore } from "./scoring";
 
 export type SeasonStanding = {
   season: Season;
@@ -47,11 +48,12 @@ async function database() {
 export async function standings(): Promise<SeasonStanding[]> {
   const db = await database();
   const { results } = await db
-    .prepare("SELECT season, participant, points FROM game_scores")
-    .all<{ season: Season; participant: string | null; points: number }>();
+    .prepare("SELECT slot, season, participant, points FROM game_scores")
+    .all<{ slot: string; season: Season; participant: string | null; points: number }>();
   const teamPoints = new Map<Season, number>();
   const participantPoints = new Map<string, number>();
   for (const row of results) {
+    if (!isFinalScore(row.slot)) continue;
     teamPoints.set(row.season, (teamPoints.get(row.season) ?? 0) + Number(row.points));
     if (row.participant) participantPoints.set(row.participant, (participantPoints.get(row.participant) ?? 0) + Number(row.points));
   }
@@ -93,6 +95,15 @@ export async function submissions(): Promise<Submission[]> {
     )
     .all<Submission>();
   return results;
+}
+
+export async function gamesAreOver(): Promise<boolean> {
+  const db = await database();
+  const [row, { results }] = await Promise.all([
+    db.prepare("SELECT COUNT(*) AS remaining FROM game_state WHERE status != 'completed'").first<{ remaining: number }>(),
+    db.prepare("SELECT game_id, slot FROM game_scores WHERE slot LIKE 'place-%'").all<{ game_id: GameId; slot: string }>(),
+  ]);
+  return Number(row?.remaining) === 0 && finalResultsComplete(results);
 }
 
 export async function submittedColors(season: Season): Promise<string[]> {
