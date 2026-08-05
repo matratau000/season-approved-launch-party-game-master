@@ -2,7 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { logout } from "../actions";
-import { gameStates, gamesAreOver, standings } from "@/lib/data";
+import { gameStates, gamesAreOver, standings, teamPhotos } from "@/lib/data";
 import { games } from "@/lib/games";
 import { isParticipant, roster, seasonFor } from "@/lib/roster";
 import { LiveRefresh } from "@/components/live-refresh";
@@ -15,16 +15,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const participant = (await cookies()).get("participant")?.value ?? "";
   if (!isParticipant(participant)) redirect("/");
   const season = seasonFor(participant)!;
-  const [currentStandings, states, over, params] = await Promise.all([standings(), gameStates(), gamesAreOver(), searchParams]);
+  const [currentStandings, states, over, photos, params] = await Promise.all([standings(), gameStates(), gamesAreOver(), teamPhotos(), searchParams]);
   const own = currentStandings.find((entry) => entry.season === season)!;
   const winner = uniqueLeader(currentStandings);
+  const photo = photos.find((item) => item.season === season);
   const personalPoints = own.contributors.find((entry) => entry.name === participant)?.points ?? 0;
 
   return (
     <main className={`app-shell theme-${season.toLowerCase()}`}>
       <LiveRefresh />
       {params.welcome === "1" && <WelcomeCelebration name={participant} season={season} />}
-      {params.welcome !== "1" && over && winner && <WinnerCelebration season={winner.season} />}
+      {params.welcome !== "1" && over && winner && <WinnerCelebration season={winner.season} hasPhoto={photos.some((item) => item.season === winner.season)} />}
       <header className="app-header">
         <div><p className="eyebrow">Welcome, {participant}</p><h1>Team {season}</h1></div>
         <form action={logout}><button className="ghost">Switch participant</button></form>
@@ -34,6 +35,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <article className="hero-stat"><span>Your contribution</span><strong>{personalPoints}</strong><small>points</small></article>
         <article className="hero-stat"><span>Team total</span><strong>{own.points}</strong><small>points</small></article>
       </section>
+      {photo && <section className="panel team-photo"><p className="eyebrow">Your team photo</p><h2>Team {season}</h2>
+        {/* Private R2 media cannot use the Next image optimizer. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={`/team-photo/${season}`} alt={`Team ${season}`} />
+      </section>}
       <section className="panel">
         <div className="section-heading"><div><p className="eyebrow">Your people</p><h2>Team {season}</h2></div></div>
         <div className="team-grid">{roster[season].map((name) => <div className={name === participant ? "person you" : "person"} key={name}>{name}{name === participant && <small>You</small>}</div>)}</div>
