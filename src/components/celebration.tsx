@@ -13,11 +13,15 @@ export function WelcomeCelebration({ name, season }: { name: string; season: str
   return <div className="celebration welcome-celebration" role="status"><span aria-hidden="true">✦ ✧ ✦</span><h1>{name}, Welcome to Team {season}!</h1><button onClick={close}>Continue</button><span aria-hidden="true">✦ ✧ ✦</span></div>;
 }
 
-export function WinnerCelebration({ season }: { season: string }) {
+export function WinnerCelebration({ season, hasPhoto = false }: { season: string; hasPhoto?: boolean }) {
   const [visible, setVisible] = useState(true);
   useEffect(() => {
     const timer = window.setTimeout(() => setVisible(false), 8000);
     return () => window.clearTimeout(timer);
   }, []);
-  return visible ? <div className={`celebration winner-celebration theme-${season.toLowerCase()}`} role="status"><span aria-hidden="true">🎉 🏆 🎉</span><h1>{season} wins!</h1><button onClick={() => setVisible(false)}>Close celebration</button><span aria-hidden="true">🎊 ✨ 🎊</span></div> : null;
+  return visible ? <div className={`celebration winner-celebration theme-${season.toLowerCase()}`} role="status"><span aria-hidden="true">🎉 🏆 🎉</span><h1>{season} wins!</h1>{hasPhoto && <>
+    {/* Private R2 media cannot use the Next image optimizer. */}
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img src={`/team-photo/${season}`} alt={`Winning Team ${season}`} />
+  </>}<button onClick={() => setVisible(false)}>Close celebration</button><span aria-hidden="true">🎊 ✨ 🎊</span></div> : null;
 }

@@ -1,11 +1,11 @@
-import { controlScavengerTimer, endGames, gameMasterLogin, gameMasterLogout, reviewSubmission, saveKahootWinners, savePlacements, saveSongScore, setGameLink, setGameStatus } from "../actions";
-import { gameScores, gameStates, standings, submissions, type Submission } from "@/lib/data";
+import { controlScavengerTimer, endGames, gameMasterLogin, gameMasterLogout, reviewSubmission, saveKahootWinners, savePlacements, saveSongScore, saveTeamPhoto, setGameLink, setGameStatus } from "../actions";
+import { gameScores, gameStates, standings, submissions, teamPhotos, type Submission } from "@/lib/data";
 import { games } from "@/lib/games";
 import { isGameMaster } from "@/lib/game-master";
 import { roster, seasons } from "@/lib/roster";
 import { LiveRefresh } from "@/components/live-refresh";
 import { Countdown } from "@/components/countdown";
-import { ResetDashboardForm, ResetScavengerForm } from "@/components/reset-scoreboard-form";
+import { ClearTeamPhotoForm, ResetDashboardForm, ResetScavengerForm } from "@/components/reset-scoreboard-form";
 import { seasonColors } from "@/lib/season-colors";
 import { timerRemaining } from "@/lib/timer";
 import { finalResultsComplete, placePoints, uniqueLeader } from "@/lib/scoring";
@@ -45,7 +45,7 @@ export default async function GameMasterPage({ searchParams }: { searchParams: P
   const error = params.error;
   if (!(await isGameMaster())) return <main className="login-shell"><section className="login-card"><p className="eyebrow">SeasonApproved Analyst</p><h1>Game Master</h1><p className="lede">Enter the event PIN to control games and scoring.</p><form action={gameMasterLogin} className="login-form"><label htmlFor="pin">Game Master PIN</label><input id="pin" name="pin" type="password" inputMode="numeric" autoComplete="current-password" required />{error && <p className="error">{error}</p>}<button>Sign in</button></form></section></main>;
 
-  const [allSubmissions, states, scores, currentStandings] = await Promise.all([submissions(), gameStates(), gameScores(), standings()]);
+  const [allSubmissions, states, scores, currentStandings, photos] = await Promise.all([submissions(), gameStates(), gameScores(), standings(), teamPhotos()]);
   const pending = allSubmissions.filter((item) => item.status === "pending").length;
   const activeCounts = new Map<string, number>();
   for (const item of allSubmissions.filter((item) => item.status !== "rejected")) {
@@ -60,9 +60,19 @@ export default async function GameMasterPage({ searchParams }: { searchParams: P
   return (
     <main className="admin-shell">
       <LiveRefresh every={4000} />
-      {resultsComplete && states.every((state) => state.status === "completed") && winner && <WinnerCelebration season={winner.season} />}
+      {resultsComplete && states.every((state) => state.status === "completed") && winner && <WinnerCelebration season={winner.season} hasPhoto={photos.some((photo) => photo.season === winner.season)} />}
       <header className="admin-header"><div><p className="eyebrow">SeasonApproved Analyst</p><h1>Game Master</h1><p>{pending} submission{pending === 1 ? "" : "s"} waiting for review</p></div><div className="control-actions"><a href="/scoreboard" target="_blank">Open TV scoreboard ↗</a><form action={endGames}><button disabled={!winner || !resultsComplete}>{!resultsComplete ? "Games are over · submit every result" : winner ? `Games are over · ${winner.season} wins` : "Games are over · resolve the tie"}</button></form><ResetDashboardForm /><form action={gameMasterLogout}><button className="ghost">Sign out</button></form></div></header>
+      {error && <div className="error-box">{error}</div>}
       <section className="game-controls">{games.map((game) => <StatusControls game={game} state={states.find((state) => state.game_id === game.id)!} key={game.id} />)}</section>
+
+      <section className="panel admin-section" id="team-photos"><p className="eyebrow">Team arrivals</p><h2>Team photos</h2><p className="lede">Assign one persistent photo to each season. Uploading again replaces only that team&apos;s photo.</p><div className="team-photo-grid">{seasons.map((season) => {
+        const photo = photos.find((item) => item.season === season);
+        return <article className={`team-photo-card theme-${season.toLowerCase()}`} key={season}><div><p className="eyebrow">Assigned team</p><h3>Team {season}</h3></div>{photo ? <>
+          {/* Private R2 media cannot use the Next image optimizer. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={`/team-photo/${season}`} alt={`Team ${season}`} />
+        </> : <div className="team-photo-empty">No photo assigned</div>}<form action={saveTeamPhoto}><input type="hidden" name="season" value={season} /><label>{photo ? "Replace photo" : "Choose photo"}<input name="photo" type="file" accept="image/jpeg,image/png,image/webp" required /></label><button>{photo ? "Replace" : "Upload"}</button></form>{photo && <ClearTeamPhotoForm season={season} />}</article>;
+      })}</div></section>
 
       <section className="panel admin-section" id="game-1"><p className="eyebrow">Game 01</p><h2>Color Song Quiz scoring</h2><div className="in-game-totals">{seasons.map((season) => <span key={season}><strong>{season}</strong>{songTotals.get(season)} in-game points</span>)}</div><div className="song-grid">{Array.from({ length: 22 }, (_, index) => {
         const song = index + 1;

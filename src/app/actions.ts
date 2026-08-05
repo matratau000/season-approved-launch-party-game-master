@@ -13,6 +13,7 @@ import { timerRemaining } from "@/lib/timer";
 
 const maxUploadBytes = 12 * 1024 * 1024;
 const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]);
+const teamPhotoTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 async function database() {
   return (await getCloudflareContext({ async: true })).env.DB;
@@ -164,6 +165,50 @@ export async function saveKahootWinners(formData: FormData) {
   ]);
   revalidateLiveViews();
   redirect("/game-master#game-3");
+}
+
+export async function saveTeamPhoto(formData: FormData) {
+  await requireGameMaster();
+  const season = String(formData.get("season") ?? "") as Season;
+  const file = formData.get("photo");
+  if (!seasons.includes(season)) return;
+  if (!(file instanceof File) || file.size === 0) redirect("/game-master?error=Choose+a+team+photo#team-photos");
+  if (!teamPhotoTypes.has(file.type) || file.size > maxUploadBytes) redirect("/game-master?error=Use+a+JPG,+PNG,+or+WebP+under+12MB#team-photos");
+
+  const { env } = await getCloudflareContext({ async: true });
+  const previous = await env.DB.prepare("SELECT object_key, previous_object_key FROM team_photos WHERE season = ?").bind(season).first<{ object_key: string; previous_object_key: string | null }>();
+  if (previous?.previous_object_key) {
+    await env.SUBMISSIONS.delete(previous.previous_object_key);
+    await env.DB.prepare("UPDATE team_photos SET previous_object_key = NULL WHERE season = ?").bind(season).run();
+  }
+  const extension = file.name.split(".").pop()?.replace(/[^a-z0-9]/gi, "").toLowerCase() || "jpg";
+  const objectKey = `team-photos/${season.toLowerCase()}/${crypto.randomUUID()}.${extension}`;
+  await env.SUBMISSIONS.put(objectKey, await file.arrayBuffer(), { httpMetadata: { contentType: file.type } });
+  try {
+    await env.DB.prepare(
+      "INSERT INTO team_photos (season, object_key, content_type) VALUES (?, ?, ?) ON CONFLICT(season) DO UPDATE SET previous_object_key = team_photos.object_key, object_key = excluded.object_key, content_type = excluded.content_type, updated_at = CURRENT_TIMESTAMP",
+    ).bind(season, objectKey, file.type).run();
+  } catch (error) {
+    await env.SUBMISSIONS.delete(objectKey);
+    throw error;
+  }
+  if (previous?.object_key) {
+    await env.SUBMISSIONS.delete(previous.object_key);
+    await env.DB.prepare("UPDATE team_photos SET previous_object_key = NULL WHERE season = ? AND previous_object_key = ?").bind(season, previous.object_key).run();
+  }
+  revalidateLiveViews();
+}
+
+export async function clearTeamPhoto(formData: FormData) {
+  await requireGameMaster();
+  const season = String(formData.get("season") ?? "") as Season;
+  if (!seasons.includes(season)) return;
+  const { env } = await getCloudflareContext({ async: true });
+  const previous = await env.DB.prepare("SELECT object_key, previous_object_key FROM team_photos WHERE season = ?").bind(season).first<{ object_key: string; previous_object_key: string | null }>();
+  if (!previous) return;
+  await env.SUBMISSIONS.delete([previous.object_key, previous.previous_object_key].filter((key): key is string => Boolean(key)));
+  await env.DB.prepare("DELETE FROM team_photos WHERE season = ?").bind(season).run();
+  revalidateLiveViews();
 }
 
 export async function submitScavengerHunt(formData: FormData) {

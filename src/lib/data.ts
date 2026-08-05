@@ -41,6 +41,10 @@ export type Submission = {
   created_at: string;
 };
 
+export type TeamPhoto = {
+  season: Season;
+};
+
 async function database() {
   return (await getCloudflareContext({ async: true })).env.DB;
 }
@@ -85,6 +89,13 @@ export async function gameScores(): Promise<GameScore[]> {
   const { results } = await (await database())
     .prepare("SELECT game_id, slot, season, participant, points, detail FROM game_scores ORDER BY game_id, slot")
     .all<GameScore>();
+  return results;
+}
+
+export async function teamPhotos(): Promise<TeamPhoto[]> {
+  const { results } = await (await database())
+    .prepare("SELECT season FROM team_photos ORDER BY season")
+    .all<TeamPhoto>();
   return results;
 }
 
