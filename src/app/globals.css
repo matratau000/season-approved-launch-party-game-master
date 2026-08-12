@@ -222,9 +222,6 @@ textarea { padding: 1rem; resize: vertical; }
 .welcome-celebration { animation: celebration-in .45s ease-out both, celebration-out .45s ease-in 2.55s forwards; }
 .winner-celebration { overflow-y: auto; background: var(--season); }
 .winner-celebration img { width: min(90vw, 70rem); max-height: 52vh; border-radius: 1.2rem; object-fit: contain; }
-.team-photo { text-align: center; }
-.team-photo h2 { margin-top: 0; }
-.team-photo img { width: 100%; max-height: min(55vh, 36rem); border-radius: 1rem; background: #e8e5dc; object-fit: contain; }
 .team-photo-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 1rem; }
 .team-photo-card { display: grid; gap: .75rem; align-content: start; padding: 1rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--season-soft); }
 .team-photo-card h3 { margin: 0; }

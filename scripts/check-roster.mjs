@@ -12,4 +12,5 @@ assert.equal(new Set(names.map((name) => name.toLowerCase())).size, 20);
 assert.deepEqual(Object.keys(colors), Object.keys(roster));
 assert.ok(Object.values(colors).every((palette) => palette.length === 36));
 assert.ok(Object.values(colors).flat().every((color) => /^#[0-9A-F]{6}$/.test(color.hex) && color.name));
+assert.ok(Object.values(colors).flat().every((color) => !["lavendar", "teracotta", "yellow orche"].some((misspelling) => color.name.toLowerCase().includes(misspelling))));
 console.log("Roster and palette check passed: 4 seasons, 20 participants, 36 colors each.");
