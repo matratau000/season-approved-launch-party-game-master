@@ -1,5 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { roster, seasons, type Season } from "./roster";
+import { seasons, type Season } from "./roster";
 import type { GameId } from "./games";
 import { finalResultsComplete, isFinalScore } from "./scoring";
 
@@ -45,32 +45,55 @@ export type TeamPhoto = {
   season: Season;
 };
 
+export type Participant = {
+  id: string;
+  name: string;
+  season: Season;
+};
+
 async function database() {
   return (await getCloudflareContext({ async: true })).env.DB;
 }
 
 export async function standings(): Promise<SeasonStanding[]> {
   const db = await database();
-  const { results } = await db
-    .prepare("SELECT slot, season, participant, points FROM game_scores")
-    .all<{ slot: string; season: Season; participant: string | null; points: number }>();
+  const [{ results }, registered] = await Promise.all([
+    db.prepare("SELECT slot, season, participant, points FROM game_scores")
+      .all<{ slot: string; season: Season; participant: string | null; points: number }>(),
+    participants(),
+  ]);
   const teamPoints = new Map<Season, number>();
   const participantPoints = new Map<string, number>();
   for (const row of results) {
     if (!isFinalScore(row.slot)) continue;
     teamPoints.set(row.season, (teamPoints.get(row.season) ?? 0) + Number(row.points));
-    if (row.participant) participantPoints.set(row.participant, (participantPoints.get(row.participant) ?? 0) + Number(row.points));
+    const key = `${row.season}:${row.participant}`;
+    if (row.participant) participantPoints.set(key, (participantPoints.get(key) ?? 0) + Number(row.points));
   }
 
   return seasons
     .map((season) => ({
       season,
       points: teamPoints.get(season) ?? 0,
-      contributors: roster[season]
-        .map((name) => ({ name, points: participantPoints.get(name) ?? 0 }))
+      contributors: registered
+        .filter((participant) => participant.season === season)
+        .map(({ name }) => ({ name, points: participantPoints.get(`${season}:${name}`) ?? 0 }))
         .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name)),
     }))
     .sort((a, b) => b.points - a.points || a.season.localeCompare(b.season));
+}
+
+export async function participants(): Promise<Participant[]> {
+  const { results } = await (await database())
+    .prepare("SELECT id, name, season FROM participants ORDER BY CASE season WHEN 'Winter' THEN 1 WHEN 'Spring' THEN 2 WHEN 'Summer' THEN 3 ELSE 4 END, name COLLATE NOCASE")
+    .all<Participant>();
+  return results;
+}
+
+export async function participant(id: string): Promise<Participant | null> {
+  if (!id) return null;
+  return (await database()).prepare("SELECT id, name, season FROM participants WHERE id = ?")
+    .bind(id).first<Participant>();
 }
 
 export async function gameStates(): Promise<GameState[]> {

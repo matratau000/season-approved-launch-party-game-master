@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { gameAccess } from "@/lib/game-access";
-import { roster, seasonFor } from "@/lib/roster";
+import { type Season } from "@/lib/roster";
 import { seasonColors } from "@/lib/season-colors";
-import { submittedColors } from "@/lib/data";
+import { participants, submittedColors } from "@/lib/data";
 import { submitScavengerHunt } from "../actions";
 import { Countdown } from "@/components/countdown";
 import { LiveRefresh } from "@/components/live-refresh";
@@ -21,8 +21,9 @@ const rules = [
 export default async function ScavengerHuntPage({ searchParams }: { searchParams: Promise<{ error?: string; submitted?: string; preview?: string }> }) {
   const params = await searchParams;
   const access = await gameAccess(4, params.preview === "1");
-  const season = access.participant ? seasonFor(access.participant)! : "Winter";
-  const usedColors = access.preview ? [] : await submittedColors(season);
+  const season: Season = access.participant?.season ?? "Winter";
+  const [usedColors, registered] = await Promise.all([access.preview ? Promise.resolve<string[]>([]) : submittedColors(season), participants()]);
+  const teammates = registered.filter((participant) => participant.season === season);
   const remaining = timerRemaining(access.state);
   const canSubmit = !access.preview && access.state.status === "live" && access.state.timer_phase === "hunt" && Boolean(access.state.timer_running) && remaining > 0;
   const timerLabel = access.state.timer_phase === "delegation" ? "Delegation and rules" : "Color hunt";
@@ -37,7 +38,7 @@ export default async function ScavengerHuntPage({ searchParams }: { searchParams
         {params.error && <div className="error-box">{params.error}</div>}
         {access.preview ? <p>Preview mode does not accept submissions.</p> : !canSubmit ? <p className="closed-notice">{access.state.status === "completed" ? "Submissions are closed." : access.state.timer_phase === "delegation" ? "Use this time to review the rules and delegate roles. Submissions open when the 10-minute hunt begins." : access.state.timer_phase === "hunt" && !access.state.timer_running && remaining > 0 ? "The hunt is paused. Submissions resume when the Game Master presses play." : "Submissions open when the Game Master starts the 10-minute hunt."}</p> : <form action={submitScavengerHunt} className="upload-form">
           <PhotoPicker />
-          <label>Who found this color?<select name="finder" defaultValue={access.participant} required>{roster[season].map((name) => <option key={name}>{name}</option>)}</select></label>
+          <label>Who found this color?<select name="finder" defaultValue={access.participant?.id} required>{teammates.map((participant) => <option value={participant.id} key={participant.id}>{participant.name}</option>)}</select></label>
           <fieldset className="color-picker"><legend>Which {season} color matches?</legend><div className="color-grid">{seasonColors[season].map((color) => {
             const used = usedColors.includes(color.hex);
             return <label className={used ? "used" : ""} key={color.hex}><input type="radio" name="color" value={color.hex} required disabled={used} /><span className="color-swatch" style={{ background: color.hex }} /><span>{color.name}{used ? " · submitted" : ""}</span></label>;
