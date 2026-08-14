@@ -6,7 +6,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { clearGameMasterSession, gameMasterPinMatches, isGameMaster, setGameMasterSession } from "@/lib/game-master";
 import { games, type GameId } from "@/lib/games";
-import { isParticipant, roster, seasonFor, seasons, type Season } from "@/lib/roster";
+import { participantName, seasons, type Season } from "@/lib/roster";
 import { allUnique, finalResultsComplete, kahootPoints, placePoints, songPoints, uniqueLeader } from "@/lib/scoring";
 import { colorFor } from "@/lib/season-colors";
 import { timerRemaining } from "@/lib/timer";
@@ -36,9 +36,15 @@ function revalidateLiveViews() {
 }
 
 export async function login(formData: FormData) {
-  const participant = String(formData.get("participant") ?? "");
-  if (!isParticipant(participant)) redirect("/?error=Choose+a+valid+name");
-  (await cookies()).set("participant", participant, {
+  const season = String(formData.get("season") ?? "") as Season;
+  if (!seasons.includes(season)) redirect("/?error=Choose+a+Season+Team");
+  const name = participantName(String(formData.get("name") ?? ""));
+  if (!name) redirect(`/?season=${season}&error=Enter+a+name+under+50+characters`);
+  const registered = await (await database()).prepare(
+    "INSERT INTO participants (id, name, season) VALUES (?, ?, ?) ON CONFLICT DO UPDATE SET updated_at = CURRENT_TIMESTAMP RETURNING id",
+  ).bind(crypto.randomUUID(), name, season).first<{ id: string }>();
+  if (!registered) throw new Error("Participant registration failed");
+  (await cookies()).set("participant", registered.id, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -154,17 +160,59 @@ export async function savePlacements(formData: FormData) {
 
 export async function saveKahootWinners(formData: FormData) {
   await requireGameMaster();
-  const winners = kahootPoints.map((_, index) => String(formData.get(`place${index + 1}`) ?? ""));
-  if (!allUnique(winners) || !winners.every(isParticipant)) return;
   const db = await database();
+  const winners = kahootPoints.map((_, index) => String(formData.get(`place${index + 1}`) ?? ""));
+  if (!allUnique(winners)) return;
+  const { results } = await db.prepare(`SELECT id, name, season FROM participants WHERE id IN (${winners.map(() => "?").join(",")})`)
+    .bind(...winners).all<{ id: string; name: string; season: Season }>();
+  if (results.length !== winners.length) return;
+  const registered = new Map(results.map((participant) => [participant.id, participant]));
   await db.batch([
     db.prepare("DELETE FROM game_scores WHERE game_id = 3"),
-    ...winners.map((participant, index) => db.prepare(
+    ...winners.map((id, index) => db.prepare(
       "INSERT INTO game_scores (id, game_id, slot, season, participant, points, detail) VALUES (?, 3, ?, ?, ?, ?, ?)",
-    ).bind(crypto.randomUUID(), `place-${index + 1}`, seasonFor(participant)!, participant, kahootPoints[index], `${index + 1}`)),
+    ).bind(crypto.randomUUID(), `place-${index + 1}`, registered.get(id)!.season, registered.get(id)!.name, kahootPoints[index], `${index + 1}`)),
   ]);
   revalidateLiveViews();
   redirect("/game-master#game-3");
+}
+
+export async function updateParticipant(formData: FormData) {
+  await requireGameMaster();
+  const id = String(formData.get("participantId") ?? "");
+  const name = participantName(String(formData.get("name") ?? ""));
+  if (!id || !name) redirect("/game-master?error=Enter+a+name+under+50+characters#team-members");
+  const db = await database();
+  const current = await db.prepare("SELECT name, season FROM participants WHERE id = ?").bind(id).first<{ name: string; season: Season }>();
+  if (!current) redirect("/game-master?error=That+team+member+no+longer+exists#team-members");
+  const duplicate = await db.prepare("SELECT id FROM participants WHERE season = ? AND name = ? COLLATE NOCASE AND id != ?")
+    .bind(current.season, name, id).first();
+  if (duplicate) redirect("/game-master?error=That+name+is+already+on+the+team#team-members");
+  await db.batch([
+    db.prepare("UPDATE participants SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(name, id),
+    db.prepare("UPDATE submissions SET participant = ? WHERE participant = ? AND season = ?").bind(name, current.name, current.season),
+    db.prepare("UPDATE game_scores SET participant = ?, updated_at = CURRENT_TIMESTAMP WHERE participant = ? AND season = ?").bind(name, current.name, current.season),
+  ]);
+  revalidateLiveViews();
+  redirect("/game-master#team-members");
+}
+
+export async function removeParticipant(formData: FormData) {
+  await requireGameMaster();
+  const id = String(formData.get("participantId") ?? "");
+  if (!id) return;
+  await (await database()).prepare("DELETE FROM participants WHERE id = ?").bind(id).run();
+  revalidateLiveViews();
+  redirect("/game-master#team-members");
+}
+
+export async function resetTeam(formData: FormData) {
+  await requireGameMaster();
+  const season = String(formData.get("season") ?? "") as Season;
+  if (!seasons.includes(season)) return;
+  await (await database()).prepare("DELETE FROM participants WHERE season = ?").bind(season).run();
+  revalidateLiveViews();
+  redirect("/game-master#team-members");
 }
 
 export async function saveTeamPhoto(formData: FormData) {
@@ -212,34 +260,35 @@ export async function clearTeamPhoto(formData: FormData) {
 }
 
 export async function submitScavengerHunt(formData: FormData) {
-  const participant = (await cookies()).get("participant")?.value ?? "";
-  if (!isParticipant(participant)) redirect("/");
-  const season = seasonFor(participant)!;
-  const finder = String(formData.get("finder") ?? "");
-  if (!roster[season].includes(finder)) redirect("/scavenger-hunt?error=Choose+the+teammate+who+found+the+color");
+  const db = await database();
+  const participant = await db.prepare("SELECT id, name, season FROM participants WHERE id = ?")
+    .bind((await cookies()).get("participant")?.value ?? "").first<{ id: string; name: string; season: Season }>();
+  if (!participant) redirect("/");
+  const finder = await db.prepare("SELECT name FROM participants WHERE id = ? AND season = ?")
+    .bind(String(formData.get("finder") ?? ""), participant.season).first<{ name: string }>();
+  if (!finder) redirect("/scavenger-hunt?error=Choose+the+teammate+who+found+the+color");
   const file = formData.get("evidence");
-  const color = colorFor(season, String(formData.get("color") ?? ""));
+  const color = colorFor(participant.season, String(formData.get("color") ?? ""));
   if (!(file instanceof File) || file.size === 0) redirect("/scavenger-hunt?error=Choose+a+photo+or+screenshot");
   if (!color) redirect("/scavenger-hunt?error=Choose+one+of+your+Season+colors");
   if (!allowedTypes.has(file.type) || file.size > maxUploadBytes) redirect("/scavenger-hunt?error=Use+a+JPG,+PNG,+WebP,+or+HEIC+under+12MB");
 
-  const db = await database();
   const state = await db.prepare("SELECT status, started_at, duration_seconds, timer_phase, timer_running, timer_remaining_seconds FROM game_state WHERE game_id = 4")
     .first<{ status: string; started_at: string | null; duration_seconds: number; timer_phase: string; timer_running: number; timer_remaining_seconds: number }>();
   if (!state || state.status !== "live" || state.timer_phase !== "hunt" || !state.timer_running || timerRemaining(state) <= 0) redirect("/dashboard?error=The+Scavenger+Hunt+is+closed");
-  if (await db.prepare("SELECT id FROM submissions WHERE season = ? AND color_hex = ? AND status != 'rejected'").bind(season, color.hex).first()) {
+  if (await db.prepare("SELECT id FROM submissions WHERE season = ? AND color_hex = ? AND status != 'rejected'").bind(participant.season, color.hex).first()) {
     redirect("/scavenger-hunt?error=Your+team+already+submitted+that+color");
   }
 
   const id = crypto.randomUUID();
   const extension = file.name.split(".").pop()?.replace(/[^a-z0-9]/gi, "").toLowerCase() || "jpg";
-  const objectKey = `scavenger-hunt/${participant.toLowerCase()}/${id}.${extension}`;
+  const objectKey = `scavenger-hunt/${participant.id}/${id}.${extension}`;
   const { env } = await getCloudflareContext({ async: true });
   await env.SUBMISSIONS.put(objectKey, await file.arrayBuffer(), { httpMetadata: { contentType: file.type } });
   try {
     await db.prepare(
       "INSERT INTO submissions (id, participant, season, object_key, content_type, color_name, color_hex) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    ).bind(id, finder, season, objectKey, file.type, color.name, color.hex).run();
+    ).bind(id, finder.name, participant.season, objectKey, file.type, color.name, color.hex).run();
   } catch (error) {
     await env.SUBMISSIONS.delete(objectKey);
     if (String(error).includes("UNIQUE")) redirect("/scavenger-hunt?error=Your+team+already+submitted+that+color");

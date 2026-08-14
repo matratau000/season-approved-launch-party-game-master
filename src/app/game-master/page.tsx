@@ -1,11 +1,11 @@
-import { controlScavengerTimer, endGames, gameMasterLogin, gameMasterLogout, reviewSubmission, saveKahootWinners, savePlacements, saveSongScore, saveTeamPhoto, setGameLink, setGameStatus } from "../actions";
-import { gameScores, gameStates, standings, submissions, teamPhotos, type Submission } from "@/lib/data";
+import { controlScavengerTimer, endGames, gameMasterLogin, gameMasterLogout, reviewSubmission, saveKahootWinners, savePlacements, saveSongScore, saveTeamPhoto, setGameLink, setGameStatus, updateParticipant } from "../actions";
+import { gameScores, gameStates, participants, standings, submissions, teamPhotos, type Submission } from "@/lib/data";
 import { games } from "@/lib/games";
 import { isGameMaster } from "@/lib/game-master";
-import { roster, seasons } from "@/lib/roster";
+import { seasons } from "@/lib/roster";
 import { LiveRefresh } from "@/components/live-refresh";
 import { Countdown } from "@/components/countdown";
-import { ClearTeamPhotoForm, ResetDashboardForm, ResetScavengerForm } from "@/components/reset-scoreboard-form";
+import { ClearTeamPhotoForm, RemoveParticipantForm, ResetDashboardForm, ResetScavengerForm, ResetTeamForm } from "@/components/reset-scoreboard-form";
 import { seasonColors } from "@/lib/season-colors";
 import { timerRemaining } from "@/lib/timer";
 import { finalResultsComplete, placePoints, uniqueLeader } from "@/lib/scoring";
@@ -45,14 +45,13 @@ export default async function GameMasterPage({ searchParams }: { searchParams: P
   const error = params.error;
   if (!(await isGameMaster())) return <main className="login-shell"><section className="login-card"><p className="eyebrow">SeasonApproved Analyst</p><h1>Game Master</h1><p className="lede">Enter the event PIN to control games and scoring.</p><form action={gameMasterLogin} className="login-form"><label htmlFor="pin">Game Master PIN</label><input id="pin" name="pin" type="password" inputMode="numeric" autoComplete="current-password" required />{error && <p className="error">{error}</p>}<button>Sign in</button></form></section></main>;
 
-  const [allSubmissions, states, scores, currentStandings, photos] = await Promise.all([submissions(), gameStates(), gameScores(), standings(), teamPhotos()]);
+  const [allSubmissions, states, scores, currentStandings, photos, registered] = await Promise.all([submissions(), gameStates(), gameScores(), standings(), teamPhotos(), participants()]);
   const pending = allSubmissions.filter((item) => item.status === "pending").length;
   const activeCounts = new Map<string, number>();
   for (const item of allSubmissions.filter((item) => item.status !== "rejected")) {
     const key = `${item.season}:${item.color_hex}`;
     activeCounts.set(key, (activeCounts.get(key) ?? 0) + 1);
   }
-  const participants = seasons.flatMap((season) => roster[season]);
   const kahootWinners = [1, 2, 3].map((place) => scores.find((score) => score.game_id === 3 && score.slot === `place-${place}`));
   const winner = uniqueLeader(currentStandings);
   const resultsComplete = finalResultsComplete(scores);
@@ -64,6 +63,11 @@ export default async function GameMasterPage({ searchParams }: { searchParams: P
       <header className="admin-header"><div><p className="eyebrow">SeasonApproved Analyst</p><h1>Game Master</h1><p>{pending} submission{pending === 1 ? "" : "s"} waiting for review</p></div><div className="control-actions"><a href="/scoreboard" target="_blank">Open TV scoreboard ↗</a><form action={endGames}><button disabled={!winner || !resultsComplete}>{!resultsComplete ? "Games are over · submit every result" : winner ? `Games are over · ${winner.season} wins` : "Games are over · resolve the tie"}</button></form><ResetDashboardForm /><form action={gameMasterLogout}><button className="ghost">Sign out</button></form></div></header>
       {error && <div className="error-box">{error}</div>}
       <section className="game-controls">{games.map((game) => <StatusControls game={game} state={states.find((state) => state.game_id === game.id)!} key={game.id} />)}</section>
+
+      <section className="panel admin-section" id="team-members"><p className="eyebrow">Participant sign-ins</p><h2>Season Team members</h2><p className="lede">Names appear here after a participant chooses a Season Team and signs in. Editing a name updates saved participant labels; removing or resetting keeps scores and submissions.</p><div className="team-roster-grid">{seasons.map((season) => {
+        const team = registered.filter((participant) => participant.season === season);
+        return <article className={`team-roster-card theme-${season.toLowerCase()}`} key={season}><div className="section-heading"><h3>Team {season}</h3><ResetTeamForm season={season} /></div>{team.length ? <div className="team-member-list">{team.map((participant) => <div className="team-member" key={participant.id}><form action={updateParticipant}><input type="hidden" name="participantId" value={participant.id} /><label><span>Name</span><input maxLength={50} name="name" defaultValue={participant.name} required type="text" /></label><button>Save</button></form><RemoveParticipantForm id={participant.id} name={participant.name} /></div>)}</div> : <p className="team-photo-empty">No one has signed in yet</p>}</article>;
+      })}</div></section>
 
       <section className="panel admin-section" id="team-photos"><p className="eyebrow">Team arrivals</p><h2>Team photos</h2><p className="lede">Assign one persistent photo to each season. Uploading again replaces only that team&apos;s photo.</p><div className="team-photo-grid">{seasons.map((season) => {
         const photo = photos.find((item) => item.season === season);
@@ -85,7 +89,8 @@ export default async function GameMasterPage({ searchParams }: { searchParams: P
       <section className="panel admin-section" id="game-2"><p className="eyebrow">Game 02</p><h2>Outfit Color Match placements</h2><PlacementForm gameId={2} scores={scores} editing={params.editGame === "2"} /></section>
       <section className="panel admin-section" id="game-3"><p className="eyebrow">Game 03</p><h2>Kahoot winners</h2><form action={setGameLink} className="link-form"><input type="hidden" name="gameId" value="3" /><label>Kahoot link<input name="url" type="url" defaultValue={states.find((state) => state.game_id === 3)?.external_url} required /></label><button>Save link</button></form><form action={saveKahootWinners} className="score-form">{[1, 2, 3].map((place) => {
         const value = scores.find((score) => score.game_id === 3 && score.slot === `place-${place}`)?.participant ?? "";
-        return <label key={place}>Place {place}<select name={`place${place}`} defaultValue={value} required disabled={kahootWinners.every(Boolean) && params.editGame !== "3"}><option value="">Choose participant</option>{participants.map((name) => <option value={name} key={name}>{name} · {seasons.find((season) => roster[season].includes(name))}</option>)}</select></label>;
+        const participantId = registered.find((participant) => participant.name === value && participant.season === scores.find((score) => score.game_id === 3 && score.slot === `place-${place}`)?.season)?.id ?? "";
+        return <label key={place}>Place {place}<select name={`place${place}`} defaultValue={participantId} required disabled={kahootWinners.every(Boolean) && params.editGame !== "3"}><option value="">Choose participant</option>{registered.map((participant) => <option value={participant.id} key={participant.id}>{participant.name} · {participant.season}</option>)}</select></label>;
       })}{kahootWinners.every(Boolean) && params.editGame !== "3" ? <a className="ghost button-link unlock" href="/game-master?editGame=3#game-3">Unlock</a> : <button>Finalize winners</button>}</form>{kahootWinners.every(Boolean) && <div className="saved-result"><strong>Submitted winners</strong><ol>{kahootWinners.map((winner, index) => <li key={winner!.slot}>{index + 1}. {winner!.participant} · Team {winner!.season} · {winner!.points} points</li>)}</ol><p>{params.editGame === "3" ? "Edit the selections above and finalize to update." : "This result is locked. Unlock it to make a correction."}</p></div>}</section>
       <section className="panel admin-section" id="game-4"><p className="eyebrow">Game 04</p><h2>Scavenger Hunt placements</h2><PlacementForm gameId={4} scores={scores} editing={params.editGame === "4"} /></section>
 
