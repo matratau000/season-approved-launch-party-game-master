@@ -208,10 +208,6 @@ export async function savePlacements(formData: FormData) {
   const placements = placePoints.map((_, index) => String(formData.get(`place${index + 1}`) ?? ""));
   if (!allUnique(placements) || !placements.every((season) => seasons.includes(season as Season))) return;
   const db = await database();
-  if (gameId === 2) {
-    const completed = await db.prepare("SELECT COUNT(*) AS count FROM game_scores WHERE game_id = 2 AND slot LIKE 'heat-%-round-%'").first<{ count: number }>();
-    if (Number(completed?.count) !== 12) redirect("/game-master?error=Complete+all+12+Outfit+Color+Match+rounds+before+final+placements#game-2");
-  }
   await db.batch([
     db.prepare("DELETE FROM game_scores WHERE game_id = ? AND slot LIKE 'place-%'").bind(gameId),
     ...placements.map((season, index) => db.prepare(
