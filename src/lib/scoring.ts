@@ -1,8 +1,23 @@
 export const placePoints = [4, 3, 2, 1] as const;
 export const kahootPoints = [3, 2, 1] as const;
 
+export type OutfitRound = {
+  playerA: { id: string; name: string };
+  playerB: { id: string; name: string };
+  outcome: "first" | "steal" | "nobody";
+};
+
 export function songPoints(result: string): number | undefined {
-  return { artist: 1, title: 1, both: 3, incorrect: 0 }[result as "artist"];
+  return { artist: 1, title: 1, both: 3, incorrect: 0, nobody: 0 }[result as "artist"];
+}
+
+export function outfitRound(detail: string): OutfitRound | undefined {
+  try {
+    const round = JSON.parse(detail) as OutfitRound;
+    return round.playerA?.id && round.playerA.name && round.playerB?.id && round.playerB.name && ["first", "steal", "nobody"].includes(round.outcome) ? round : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export function allUnique(values: string[]): boolean {

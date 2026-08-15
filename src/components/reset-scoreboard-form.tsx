@@ -1,6 +1,7 @@
 "use client";
 
-import { clearTeamPhoto, removeParticipant, resetDashboard, resetScavengerSubmissions, resetTeam } from "@/app/actions";
+import { clearTeamPhoto, removeParticipant, resetDashboard, resetGameScores, resetScavengerSubmissions, resetTeam } from "@/app/actions";
+import type { GameId } from "@/lib/games";
 import type { Season } from "@/lib/roster";
 
 export function ResetDashboardForm() {
@@ -11,8 +12,14 @@ export function ResetDashboardForm() {
 
 export function ResetScavengerForm() {
   return <form action={resetScavengerSubmissions} onSubmit={(event) => {
-    if (!window.confirm("Reset every Scavenger Hunt submission and photo? This cannot be undone.")) event.preventDefault();
-  }}><button className="danger ghost">Reset submissions</button></form>;
+    if (!window.confirm("Reset the entire Scavenger Hunt gallery? Every pending, approved, and rejected submission, photo, and submitted color will be permanently deleted.")) event.preventDefault();
+  }}><button className="danger ghost">Reset Scavenger Hunt</button></form>;
+}
+
+export function ResetGameForm({ gameId, title }: { gameId: GameId; title: string }) {
+  return <form action={resetGameScores} onSubmit={(event) => {
+    if (!window.confirm(`Reset ${title}? Every saved score, round, winner, and placement for this game will be cleared.`)) event.preventDefault();
+  }}><input type="hidden" name="gameId" value={gameId} /><button className="danger ghost">Reset game</button></form>;
 }
 
 export function ClearTeamPhotoForm({ season }: { season: Season }) {

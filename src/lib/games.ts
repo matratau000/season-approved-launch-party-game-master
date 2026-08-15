@@ -1,3 +1,18 @@
+export const outfitParticipantRules = [
+  "Watch the wheel choose a guest, then use your SeasonApproved booklet to study their outfit.",
+  "Choose one color the guest is wearing and write it on your whiteboard.",
+  "Buzz when your answer is locked in. If the first answer is incorrect, the opponent may steal.",
+  "Each teammate competes once in their heat. The Game Master runs six rounds per heat.",
+];
+
+export const outfitMasterRules = [
+  "Run 2 heats with 2 Season Teams and 6 rounds in each heat.",
+  "For each round, select one unused participant from each competing Season Team and spin the guest wheel.",
+  "Bring the selected guest forward. Both participants use their booklet, write one outfit color, and buzz when ready.",
+  "Compare the first answer to the approved answer. If it is incorrect, allow the opponent to steal.",
+  "Award 1 point for a first correct answer or successful steal; award 0 when both are incorrect.",
+];
+
 export const games = [
   {
     id: 1,
@@ -15,13 +30,9 @@ export const games = [
     id: 2,
     title: "Outfit Color Match",
     icon: "👗",
-    summary: "Race to match outfit colors to their seasons.",
-    rules: [
-      "Two Season Teams race at a time using one whiteboard, Color Detect, and the SeasonApproved booklet.",
-      "Write three colors worn by each of four teammates and match each color to a season.",
-      "Raise the board when finished. Incorrect answers must be corrected while the timer keeps running.",
-    ],
-    points: ["First: 4 points", "Second: 3 points", "Third: 2 points", "Fourth: 1 point"],
+    summary: "Face off to identify one color in a guest's outfit.",
+    rules: outfitParticipantRules,
+    points: ["First player correct: 1 point", "Successful steal: 1 point", "Both incorrect: 0 points"],
   },
   {
     id: 3,
