@@ -7,7 +7,7 @@ import { redirect } from "next/navigation";
 import { clearGameMasterSession, gameMasterPinMatches, isGameMaster, setGameMasterSession } from "@/lib/game-master";
 import { games, type GameId } from "@/lib/games";
 import { participantName, seasons, type Season } from "@/lib/roster";
-import { allUnique, finalResultsComplete, kahootPoints, placePoints, songPoints, uniqueLeader } from "@/lib/scoring";
+import { allUnique, finalResultsComplete, kahootPoints, outfitRound, placePoints, songPoints, uniqueLeader } from "@/lib/scoring";
 import { colorFor } from "@/lib/season-colors";
 import { timerRemaining } from "@/lib/timer";
 
@@ -124,8 +124,10 @@ export async function setGameLink(formData: FormData) {
 export async function saveSongScore(formData: FormData) {
   await requireGameMaster();
   const song = Number(formData.get("song"));
-  const season = String(formData.get("season") ?? "") as Season;
-  const result = String(formData.get("result") ?? "");
+  const selectedSeason = String(formData.get("season") ?? "");
+  const selectedResult = String(formData.get("result") ?? "");
+  const result = selectedResult === "undo" ? "undo" : selectedSeason === "Nobody" ? "nobody" : selectedResult;
+  const season = (result === "nobody" ? "Winter" : selectedSeason) as Season;
   if (!Number.isInteger(song) || song < 1 || song > 22 || !seasons.includes(season)) return;
   const db = await database();
   const slot = `song-${String(song).padStart(2, "0")}`;
@@ -141,6 +143,64 @@ export async function saveSongScore(formData: FormData) {
   redirect(`/game-master#${slot}`);
 }
 
+export async function saveOutfitHeat(formData: FormData) {
+  await requireGameMaster();
+  const heat = Number(formData.get("heat"));
+  const teams = [String(formData.get("teamA") ?? ""), String(formData.get("teamB") ?? "")] as Season[];
+  if (![1, 2].includes(heat) || !allUnique(teams) || !teams.every((season) => seasons.includes(season))) return;
+  const db = await database();
+  const otherHeat = heat === 1 ? 2 : 1;
+  const { results: otherTeams } = await db.prepare("SELECT season FROM game_scores WHERE game_id = 2 AND slot LIKE ?")
+    .bind(`heat-${otherHeat}-team-%`).all<{ season: Season }>();
+  if (teams.some((team) => otherTeams.some((row) => row.season === team))) redirect(`/game-master?error=Each+Season+Team+can+appear+in+only+one+heat#game-2`);
+  const { results: existing } = await db.prepare("SELECT slot, season FROM game_scores WHERE game_id = 2 AND (slot LIKE ? OR slot LIKE 'place-%')")
+    .bind(`heat-${heat}-%`).all<{ slot: string; season: Season }>();
+  const configured = ["a", "b"].map((side) => existing.find((row) => row.slot === `heat-${heat}-team-${side}`)?.season ?? "");
+  if (existing.some((row) => row.slot.includes("-round-") || row.slot.startsWith("place-")) && configured.some((team, index) => team !== teams[index])) {
+    redirect(`/game-master?error=Reset+Outfit+Color+Match+before+changing+heat+teams#game-2`);
+  }
+  await db.batch(teams.map((team, index) => db.prepare(
+    "INSERT INTO game_scores (id, game_id, slot, season, points, detail) VALUES (?, 2, ?, ?, 0, 'team') ON CONFLICT(game_id, slot) DO UPDATE SET season = excluded.season, points = 0, detail = 'team', participant = NULL, updated_at = CURRENT_TIMESTAMP",
+  ).bind(crypto.randomUUID(), `heat-${heat}-team-${index === 0 ? "a" : "b"}`, team)));
+  revalidateLiveViews();
+  redirect(`/game-master#heat-${heat}`);
+}
+
+export async function saveOutfitRound(formData: FormData) {
+  await requireGameMaster();
+  const heat = Number(formData.get("heat"));
+  const round = Number(formData.get("round"));
+  const playerIds = [String(formData.get("playerA") ?? ""), String(formData.get("playerB") ?? "")];
+  const result = String(formData.get("result") ?? "");
+  if (![1, 2].includes(heat) || !Number.isInteger(round) || round < 1 || round > 6 || !allUnique(playerIds)) return;
+  const db = await database();
+  const { results: teamRows } = await db.prepare("SELECT slot, season FROM game_scores WHERE game_id = 2 AND slot LIKE ? ORDER BY slot")
+    .bind(`heat-${heat}-team-%`).all<{ slot: string; season: Season }>();
+  if (teamRows.length !== 2) redirect(`/game-master?error=Choose+both+teams+for+Heat+${heat}+first#heat-${heat}`);
+  const teams = teamRows.map((row) => row.season);
+  const { results: players } = await db.prepare("SELECT id, name, season FROM participants WHERE id IN (?, ?)")
+    .bind(...playerIds).all<{ id: string; name: string; season: Season }>();
+  const orderedPlayers = playerIds.map((id, index) => players.find((player) => player.id === id && player.season === teams[index]));
+  if (orderedPlayers.some((player) => !player)) return;
+  const slot = `heat-${heat}-round-${round}`;
+  const { results: otherRounds } = await db.prepare("SELECT detail FROM game_scores WHERE game_id = 2 AND slot LIKE ? AND slot != ?")
+    .bind(`heat-${heat}-round-%`, slot).all<{ detail: string }>();
+  if (otherRounds.some(({ detail }) => {
+    const saved = outfitRound(detail);
+    return saved && playerIds.some((id) => saved.playerA.id === id || saved.playerB.id === id);
+  })) redirect(`/game-master?error=Each+participant+can+compete+only+once+per+heat#${slot}`);
+  const [winner, outcome] = result === "nobody" ? [teams[0], "nobody"] : result.split(":");
+  if (!teams.includes(winner as Season) || !["first", "steal", "nobody"].includes(outcome)) return;
+  await db.batch([
+    db.prepare(
+      "INSERT INTO game_scores (id, game_id, slot, season, points, detail) VALUES (?, 2, ?, ?, ?, ?) ON CONFLICT(game_id, slot) DO UPDATE SET season = excluded.season, points = excluded.points, detail = excluded.detail, participant = NULL, updated_at = CURRENT_TIMESTAMP",
+    ).bind(crypto.randomUUID(), slot, winner, outcome === "nobody" ? 0 : 1, JSON.stringify({ playerA: orderedPlayers[0], playerB: orderedPlayers[1], outcome })),
+    db.prepare("DELETE FROM game_scores WHERE game_id = 2 AND slot LIKE 'place-%'"),
+  ]);
+  revalidateLiveViews();
+  redirect(`/game-master#${slot}`);
+}
+
 export async function savePlacements(formData: FormData) {
   await requireGameMaster();
   const gameId = gameIdFrom(formData);
@@ -148,6 +208,10 @@ export async function savePlacements(formData: FormData) {
   const placements = placePoints.map((_, index) => String(formData.get(`place${index + 1}`) ?? ""));
   if (!allUnique(placements) || !placements.every((season) => seasons.includes(season as Season))) return;
   const db = await database();
+  if (gameId === 2) {
+    const completed = await db.prepare("SELECT COUNT(*) AS count FROM game_scores WHERE game_id = 2 AND slot LIKE 'heat-%-round-%'").first<{ count: number }>();
+    if (Number(completed?.count) !== 12) redirect("/game-master?error=Complete+all+12+Outfit+Color+Match+rounds+before+final+placements#game-2");
+  }
   await db.batch([
     db.prepare("DELETE FROM game_scores WHERE game_id = ? AND slot LIKE 'place-%'").bind(gameId),
     ...placements.map((season, index) => db.prepare(
@@ -303,12 +367,31 @@ export async function reviewSubmission(formData: FormData) {
   await requireGameMaster();
   const submissionId = String(formData.get("submissionId") ?? "");
   const decision = String(formData.get("decision") ?? "");
-  if (!submissionId || !["approve", "reject"].includes(decision)) return;
-  await (await database()).prepare(
+  if (!submissionId || !["approve", "reject", "reset"].includes(decision)) return;
+  const db = await database();
+  if (decision === "reset") {
+    const current = await db.prepare("SELECT season, color_hex, status FROM submissions WHERE id = ?").bind(submissionId)
+      .first<{ season: Season; color_hex: string; status: string }>();
+    if (!current) return;
+    if (current.status === "rejected" && await db.prepare("SELECT id FROM submissions WHERE id != ? AND season = ? AND color_hex = ? AND status != 'rejected'")
+      .bind(submissionId, current.season, current.color_hex).first()) {
+      redirect("/game-master?error=That+color+already+has+an+active+submission#scavenger-submissions");
+    }
+    await db.prepare("UPDATE submissions SET status = 'pending', points = 0, reviewed_at = NULL WHERE id = ?").bind(submissionId).run();
+  } else await db.prepare(
     "UPDATE submissions SET status = ?, points = ?, reviewed_at = CURRENT_TIMESTAMP WHERE id = ?",
   ).bind(decision === "approve" ? "approved" : "rejected", decision === "approve" ? 1 : 0, submissionId).run();
   revalidatePath("/game-master");
   revalidatePath("/scavenger-hunt");
+}
+
+export async function resetGameScores(formData: FormData) {
+  await requireGameMaster();
+  const gameId = gameIdFrom(formData);
+  if (!gameId) return;
+  await (await database()).prepare("DELETE FROM game_scores WHERE game_id = ?").bind(gameId).run();
+  revalidateLiveViews();
+  redirect(`/game-master#game-${gameId}`);
 }
 
 export async function resetDashboard() {

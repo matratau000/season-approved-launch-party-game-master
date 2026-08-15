@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
-import { allUnique, finalResultsComplete, isFinalScore, kahootPoints, placePoints, songPoints, uniqueLeader } from "../src/lib/scoring.ts";
+import { allUnique, finalResultsComplete, isFinalScore, kahootPoints, outfitRound, placePoints, songPoints, uniqueLeader } from "../src/lib/scoring.ts";
 
 assert.deepEqual(placePoints, [4, 3, 2, 1]);
 assert.deepEqual(kahootPoints, [3, 2, 1]);
-assert.deepEqual(["artist", "title", "both", "incorrect"].map(songPoints), [1, 1, 3, 0]);
+assert.deepEqual(["artist", "title", "both", "incorrect", "nobody"].map(songPoints), [1, 1, 3, 0, 0]);
 assert.equal(songPoints("unknown"), undefined);
+const round = { playerA: { id: "a", name: "A" }, playerB: { id: "b", name: "B" }, outcome: "steal" };
+assert.deepEqual(outfitRound(JSON.stringify(round)), round);
+assert.equal(outfitRound("not-json"), undefined);
 assert.equal(allUnique(["Winter", "Spring", "Summer", "Autumn"]), true);
 assert.equal(allUnique(["Winter", "Winter", "Summer", "Autumn"]), false);
 assert.equal(isFinalScore("place-1"), true);
